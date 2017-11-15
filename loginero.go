@@ -12,6 +12,9 @@ import (
 
 var b62ascii = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
 var b62regexp = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+var defaultUserStore = RamUserStore{}
+var sidName = "LO_SID"
+var bidName = "LO_BID"
 
 func init() {
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
@@ -23,6 +26,34 @@ func init() {
 
 func SetOptions() {
 	//TODO set BID and SID cookie template (Path, Secure, HttpOnly, MaxAge, etc)
+}
+
+type RamUserStore struct {
+}
+
+func (store *RamUserStore) CreateUserCreds(r *http.Request) interface{} {
+	return nil
+}
+func (store *RamUserStore) FindUserCreds(r *http.Request) interface{} {
+	return nil
+}
+func (store *RamUserStore) GetSIDUser(sid string) interface{} {
+	return nil
+}
+func (store *RamUserStore) GetBIDUser(bid string) interface{} {
+	return nil
+}
+func (store *RamUserStore) SaveSIDUser(sid string, user interface{}) {
+
+}
+func (store *RamUserStore) SaveBIDUser(bid string, user interface{}) {
+
+}
+func (store *RamUserStore) DeleteSIDUser(sid string) {
+
+}
+func (store *RamUserStore) DeleteBIDUser(bid string) {
+
 }
 
 type UserStore interface {
@@ -43,11 +74,42 @@ type UserStore interface {
 
 func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		bid := getRequestBID(r)
+		if bid == "" {
+			bid = generateID()
+		}
+		setBIDCookie(w, bid)
+		user := defaultUserStore.FindUserCreds(r)
+		if user != nil {
+			sid := generateID()
+			setSIDCookie(w, sid)
+			defaultUserStore.SaveSIDUser(sid, user)
+			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
+		} else {
+			sid := getRequestSID(r)
+			if sid != "" {
+				deleteSIDCookie(w)
+				defaultUserStore.DeleteSIDUser(sid)
+			}
+			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
+		}
 	}
 }
 
 func getRequestBID(r *http.Request) string {
+	c, err := r.Cookie(bidName)
+	if err != nil && validatedID(c.Value) {
+		return c.Value
+	}
+	return ""
+}
 
+func getRequestSID(r *http.Request) string {
+	c, err := r.Cookie(sidName)
+	if err != nil && validatedID(c.Value) {
+		return c.Value
+	}
+	return ""
 }
 
 // 16-chars of base62 gives about 95.3 bits of entropy
@@ -66,20 +128,20 @@ func validatedID(rid string) bool {
 
 func setBIDCookie(w http.ResponseWriter, bid string) {
 	//TODO cookie should be cloned from options' BID cookie template
-	http.SetCookie(w, &http.Cookie{Name: "LO_BID", Value: bid, MaxAge: 500000000, Path: "/"})
+	http.SetCookie(w, &http.Cookie{Name: bidName, Value: bid, MaxAge: 500000000, Path: "/"})
 }
 
 func setSIDCookie(w http.ResponseWriter, sid string) {
 	//TODO cookie should be cloned from options' SID cookie template
 	//session cookie, no max-age
-	http.SetCookie(w, &http.Cookie{Name: "LO_SID", Value: sid, Path: "/"})
+	http.SetCookie(w, &http.Cookie{Name: sidName, Value: sid, Path: "/"})
 }
 
 func deleteBIDCookie(w http.ResponseWriter) {
 	//TODO cookie should be cloned from options' BID cookie template
-	http.SetCookie(w, &http.Cookie{Name: "LO_BID", Value: "", MaxAge: -1, Path: "/"})
+	http.SetCookie(w, &http.Cookie{Name: bidName, Value: "", MaxAge: -1, Path: "/"})
 }
 func deleteSIDCookie(w http.ResponseWriter) {
 	//TODO cookie should be cloned from options' SID cookie template
-	http.SetCookie(w, &http.Cookie{Name: "LO_SID", Value: "", MaxAge: -1, Path: "/"})
+	http.SetCookie(w, &http.Cookie{Name: sidName, Value: "", MaxAge: -1, Path: "/"})
 }

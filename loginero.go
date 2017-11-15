@@ -24,6 +24,18 @@ func init() {
 	mrand.Seed(seed.Int64())
 }
 
+// Generate random string
+// 16-chars of base62 gives about 95.3 bits of entropy
+// This gives the space of about 10^10 generated ids with probability of collision = 10^-9 according to birthday paradox calcs
+// This is public function because it may be used to generate one-time reset tokens for password reset
+func GenerateID() string {
+	var b = make([]byte, 16)
+	for i := 0; i < 16; i++ {
+		b[i] = b62ascii[mrand.Intn(62)]
+	}
+	return string(b)
+}
+
 func SetOptions() {
 	//TODO set BID and SID cookie template (Path, Secure, HttpOnly, MaxAge, etc)
 }
@@ -97,6 +109,7 @@ func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc 
 			sid := GenerateID()
 			setSIDCookie(w, sid)
 			defaultUserStore.SaveSessionUser(sid, user)
+			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 		} else {
 			sid := getRequestSID(r)
@@ -104,6 +117,7 @@ func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc 
 				deleteSIDCookie(w)
 				defaultUserStore.DeleteSessionUser(sid)
 			}
+			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
 		}
 	}
@@ -121,6 +135,7 @@ func CreateAccountHandler(redirectSuccess string, redirectFail string) http.Hand
 			sid := GenerateID()
 			setSIDCookie(w, sid)
 			defaultUserStore.SaveSessionUser(sid, user)
+			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 		} else {
 			sid := getRequestSID(r)
@@ -128,6 +143,33 @@ func CreateAccountHandler(redirectSuccess string, redirectFail string) http.Hand
 				deleteSIDCookie(w)
 				defaultUserStore.DeleteSessionUser(sid)
 			}
+			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
+			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
+		}
+	}
+}
+
+func ResetPasswordHandler(redirectSuccess string, redirectFail string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		bid := getRequestBID(r)
+		if bid == "" {
+			bid = GenerateID()
+		}
+		setBIDCookie(w, bid)
+		user := defaultUserStore.ResetUserCreds(r, bid)
+		if user != nil {
+			sid := GenerateID()
+			setSIDCookie(w, sid)
+			defaultUserStore.SaveSessionUser(sid, user)
+			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
+			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
+		} else {
+			sid := getRequestSID(r)
+			if sid != "" {
+				deleteSIDCookie(w)
+				defaultUserStore.DeleteSessionUser(sid)
+			}
+			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
 		}
 	}
@@ -194,17 +236,6 @@ func getRequestSID(r *http.Request) string {
 		return c.Value
 	}
 	return ""
-}
-
-// 16-chars of base62 gives about 95.3 bits of entropy
-// This gives the space of about 10^10 generated ids with probability of collision = 10^-9 according to birthday paradox calcs
-// This is public function because it may be used to generate one-time reset tokens for password reset
-func GenerateID() string {
-	var b = make([]byte, 16)
-	for i := 0; i < 16; i++ {
-		b[i] = b62ascii[mrand.Intn(62)]
-	}
-	return string(b)
 }
 
 func validatedID(id string) bool {

@@ -8,6 +8,7 @@ import (
 	"math/big"
 	mrand "math/rand"
 	"regexp"
+	"sync"
 )
 
 var b62ascii = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
@@ -47,6 +48,12 @@ type SimpleUser struct {
 }
 
 type RamUserStore struct {
+	Bid2User        map[string]interface{}
+	BidMutex        sync.RWMutex
+	Sid2User        map[string]interface{}
+	SidMutex        sync.RWMutex
+	ResetToken2User map[string]interface{}
+	ResetMutex      sync.RWMutex
 }
 
 func (store *RamUserStore) CreateUserCreds(r *http.Request, bid string) interface{} {

@@ -4,9 +4,22 @@ import (
 	"net/http"
 
 	crand "crypto/rand"
+	"math"
+	"math/big"
 	mrand "math/rand"
 	"regexp"
 )
+
+var b62ascii = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+var b62regexp = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+
+func init() {
+	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
+	if err != nil {
+		panic(err)
+	}
+	mrand.Seed(seed.Int64())
+}
 
 func SetOptions() {
 	//TODO set BID and SID cookie template (Path, Secure, HttpOnly, MaxAge, etc)
@@ -37,9 +50,8 @@ func getRequestBID(r *http.Request) string {
 
 }
 
-var b62ascii = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
-var b62regexp = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
-
+// 16-chars of base62 gives about 95.3 bits of entropy
+// This gives the space of about 10^10 generated ids with probability of collision = 10^-9 according to birthday paradox calcs
 func generateID() string {
 	var b = make([]byte, 16)
 	for i := 0; i < 16; i++ {

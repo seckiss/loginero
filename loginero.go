@@ -29,6 +29,8 @@ func SetOptions() {
 }
 
 type SimpleUser struct {
+	SID      string
+	BID      string
 	Username string
 }
 
@@ -39,6 +41,9 @@ func (store *RamUserStore) CreateUserCreds(r *http.Request, bid string) interfac
 	return nil
 }
 func (store *RamUserStore) FindUserCreds(r *http.Request, bid string) interface{} {
+	return nil
+}
+func (store *RamUserStore) ResetUserCreds(r *http.Request, bid string) interface{} {
 	return nil
 }
 func (store *RamUserStore) GetSessionUser(sid string) interface{} {
@@ -70,6 +75,9 @@ type UserStore interface {
 	// the bid argument may be used to link the anonymous BrowserUser (BIDuser)
 	// with the credential based logging in user
 	FindUserCreds(r *http.Request, bid string) interface{}
+	// for password Reset
+	// implementation needs to verify one-time reset token linked to particular user
+	ResetUserCreds(r *http.Request, bid string) interface{}
 	GetSessionUser(sid string) interface{}
 	GetBrowserUser(bid string) interface{}
 	SaveSessionUser(sid string, user interface{})
@@ -198,8 +206,8 @@ func generateID() string {
 	return string(b)
 }
 
-func validatedID(rid string) bool {
-	return len(rid) == 16 && b62regexp.MatchString(rid)
+func validatedID(id string) bool {
+	return len(id) == 16 && b62regexp.MatchString(id)
 }
 
 func setBIDCookie(w http.ResponseWriter, bid string) {

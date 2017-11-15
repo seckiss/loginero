@@ -41,29 +41,44 @@ func SetOptions() {
 	//TODO set BID and SID cookie template (Path, Secure, HttpOnly, MaxAge, etc)
 }
 
+/////////////////////////////////////////////////////
+// Example implementation to be used for testing
+// This is insecure, naive implementation of non-durable UserStore
+/////////////////////////////////////////////////////
+
 type SimpleUser struct {
-	SID      string
-	BID      string
 	Username string
 }
 
+type SimpleUserCreds struct {
+	SimpleUser
+	Password string
+}
+
 type RamUserStore struct {
-	// Registered user base
+	// Registered user base with credentials (SimpleUserCreds)
 	Username2User map[string]interface{}
-	// Anonymous user base
+	UMutex        sync.RWMutex
+	// Anonymous user base (SimpleUser)
 	Bid2User map[string]interface{}
 	BidMutex sync.RWMutex
-	// Registered user session base
+	// Registered user session base (SimpleUser)
 	Sid2User map[string]interface{}
 	SidMutex sync.RWMutex
-	// Registered users who can reset password
+	// Registered users who can reset password (SimpleUser)
 	// In full implementation entries should have expiry timeout
 	ResetToken2User map[string]interface{}
 	ResetMutex      sync.RWMutex
 }
 
 func (store *RamUserStore) CreateUserCreds(r *http.Request, bid string) interface{} {
-	return nil
+	username := r.FormValue("username")
+	pass1 := r.FormValue("pass1")
+	pass2 := r.FormValue("pass2")
+	if username != "" && pass1 == pass2 {
+		store.Username2User
+	}
+
 }
 func (store *RamUserStore) FindUserCreds(r *http.Request, bid string) interface{} {
 	return nil
@@ -87,6 +102,8 @@ func (store *RamUserStore) CreateBrowserUser(bid string) interface{} {
 func (store *RamUserStore) DeleteSessionUser(sid string) {
 
 }
+
+/////////////////////////////////////////////////////
 
 type UserStore interface {
 	// use credentials from the request to create the new user object

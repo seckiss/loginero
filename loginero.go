@@ -48,10 +48,16 @@ type SimpleUser struct {
 }
 
 type RamUserStore struct {
-	Bid2User        map[string]interface{}
-	BidMutex        sync.RWMutex
-	Sid2User        map[string]interface{}
-	SidMutex        sync.RWMutex
+	// Registered user base
+	Username2User map[string]interface{}
+	// Anonymous user base
+	Bid2User map[string]interface{}
+	BidMutex sync.RWMutex
+	// Registered user session base
+	Sid2User map[string]interface{}
+	SidMutex sync.RWMutex
+	// Registered users who can reset password
+	// In full implementation entries should have expiry timeout
 	ResetToken2User map[string]interface{}
 	ResetMutex      sync.RWMutex
 }

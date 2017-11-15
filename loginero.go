@@ -76,10 +76,20 @@ func (store *RamUserStore) CreateUserCreds(r *http.Request, bid string) interfac
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")
 	if username != "" && pass1 == pass2 {
-		store.Username2User
+		store.UMutex.RLock()
+		defer store.UMutex.RUnlock()
+		if _, pres := store.Username2User[username]; !pres {
+			// ok, username does not exist yet
+			store.UMutex.Lock()
+			newuser := SimpleUser{Username: username}
+			store.Username2User[username] = newuser
+			store.UMutex.Unlock()
+			return newuser
+		}
 	}
-
+	return nil
 }
+
 func (store *RamUserStore) FindUserCreds(r *http.Request, bid string) interface{} {
 	return nil
 }

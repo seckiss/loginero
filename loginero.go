@@ -89,12 +89,12 @@ func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc 
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
-			bid = generateID()
+			bid = GenerateID()
 		}
 		setBIDCookie(w, bid)
 		user := defaultUserStore.FindUserCreds(r, bid)
 		if user != nil {
-			sid := generateID()
+			sid := GenerateID()
 			setSIDCookie(w, sid)
 			defaultUserStore.SaveSessionUser(sid, user)
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
@@ -113,12 +113,12 @@ func CreateAccountHandler(redirectSuccess string, redirectFail string) http.Hand
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
-			bid = generateID()
+			bid = GenerateID()
 		}
 		setBIDCookie(w, bid)
 		user := defaultUserStore.CreateUserCreds(r, bid)
 		if user != nil {
-			sid := generateID()
+			sid := GenerateID()
 			setSIDCookie(w, sid)
 			defaultUserStore.SaveSessionUser(sid, user)
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
@@ -137,7 +137,7 @@ func LogoutHandler(redirectSuccess string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
-			bid = generateID()
+			bid = GenerateID()
 		}
 		setBIDCookie(w, bid)
 		sid := getRequestSID(r)
@@ -168,7 +168,7 @@ func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFun
 
 		bid := getRequestBID(r)
 		if bid == "" {
-			bid = generateID()
+			bid = GenerateID()
 			user = defaultUserStore.CreateBrowserUser(bid)
 		} else {
 			user = defaultUserStore.GetBrowserUser(bid)
@@ -198,7 +198,8 @@ func getRequestSID(r *http.Request) string {
 
 // 16-chars of base62 gives about 95.3 bits of entropy
 // This gives the space of about 10^10 generated ids with probability of collision = 10^-9 according to birthday paradox calcs
-func generateID() string {
+// This is public function because it may be used to generate one-time reset tokens for password reset
+func GenerateID() string {
 	var b = make([]byte, 16)
 	for i := 0; i < 16; i++ {
 		b[i] = b62ascii[mrand.Intn(62)]

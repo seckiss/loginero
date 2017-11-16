@@ -48,17 +48,13 @@ func SetOptions() {
 
 type SimpleUser struct {
 	Username string
-}
-
-type SimpleUserCreds struct {
-	SimpleUser
 	Password string
 }
 
 type RamUserStore struct {
-	// Registered user base with credentials (SimpleUserCreds)
-	Username2User map[string]interface{}
-	UMutex        sync.RWMutex
+	// Registered user base with credentials (SimpleUser), uid = unique user id / username
+	Uid2User map[string]interface{}
+	UidMutex sync.RWMutex
 	// Anonymous user base (SimpleUser)
 	Bid2User map[string]interface{}
 	BidMutex sync.RWMutex
@@ -76,14 +72,12 @@ func (store *RamUserStore) CreateUserCreds(r *http.Request, bid string) interfac
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")
 	if username != "" && pass1 == pass2 {
-		store.UMutex.RLock()
-		defer store.UMutex.RUnlock()
-		if _, pres := store.Username2User[username]; !pres {
+		store.UidMutex.Lock()
+		defer store.UidMutex.Unlock()
+		if _, pres := store.Uid2User[username]; !pres {
 			// ok, username does not exist yet
-			store.UMutex.Lock()
-			newuser := SimpleUser{Username: username}
-			store.Username2User[username] = newuser
-			store.UMutex.Unlock()
+			newuser := SimpleUser{Username: username, Password: pass1}
+			store.Uid2User[username] = newuser
 			return newuser
 		}
 	}
@@ -91,8 +85,20 @@ func (store *RamUserStore) CreateUserCreds(r *http.Request, bid string) interfac
 }
 
 func (store *RamUserStore) FindUserCreds(r *http.Request, bid string) interface{} {
+	username := r.FormValue("username")
+	pass1 := r.FormValue("pass1")
+	if username != "" && pass1 != "" {
+		store.UidMutex.RLock()
+		defer store.UidMutex.RUnlock()
+		if user, pres := store.Uid2User[username]; pres {
+			if pass1 == user.(SimpleUser).Password {
+				return user
+			}
+		}
+	}
 	return nil
 }
+
 func (store *RamUserStore) ResetUserCreds(r *http.Request, bid string) interface{} {
 	return nil
 }

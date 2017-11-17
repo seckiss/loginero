@@ -109,12 +109,15 @@ func (store *RamUserStore) CreateUserCreds(r *http.Request, bid string) interfac
 	return nil
 }
 
-func (store *RamUserStore) FindUserCreds(r *http.Request, bid string) interface{} {
+func (store *RamUserStore) BindToken(r *http.Request, token string, bid string) interface{} {
 	username := r.FormValue("username")
 	if username != "" {
 		store.UidMutex.RLock()
 		defer store.UidMutex.RUnlock()
 		if user, pres := store.Uid2User[username]; pres {
+			store.ResetMutex.Lock()
+			defer store.ResetMutex.Unlock()
+			store.ResetToken2User[token] = user
 			return user
 		}
 	}
@@ -140,16 +143,31 @@ func (store *RamUserStore) ResetUserCreds(r *http.Request, bid string) interface
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")
 	token := r.FormValue("token")
+	fmt.Printf("r=%+v\n", r)
+	fmt.Println("1111")
 	if pass1 == pass2 {
+		fmt.Println("222")
 		store.ResetMutex.Lock()
 		defer store.ResetMutex.Unlock()
 		user, pres := store.ResetToken2User[token]
+		fmt.Printf("rtu=%+v\n", store.ResetToken2User)
 		if pres {
 			// it's one-time user token, so delete if found
 			delete(store.ResetToken2User, token)
 			updated := user.(SimpleUser)
 			updated.Password = pass1
-			// TODO check if need to update/remove record in Sid2User, Bid2User, Uid2User
+
+			// note that in case of RamUserStore we could operate on *User and not User
+			// in this way we could avoid updating Uid2User map (single instance of object in RAM and maps could keep only references)
+			// but in general case (disk/db implementation) it would not work
+			// so we do this step here as well to make the example complete
+
+			store.UidMutex.Lock()
+			defer store.UidMutex.Unlock()
+			store.Uid2User[updated.Username] = updated
+
+			// note that we cannot update user records in Sid2User
+			// Bid2User does not matter because it does not contain passwords
 			return updated
 		}
 	}
@@ -208,7 +226,9 @@ type UserStore interface {
 	// with the newly created account/user
 	CreateUserCreds(r *http.Request, bid string) interface{}
 	// use identity (username, email, etc) from the request to find user in the db
-	FindUserCreds(r *http.Request, bid string) interface{}
+	// and bind it to the token
+	// return bound user or nil if user not found
+	BindToken(r *http.Request, token string, bid string) interface{}
 	// use credentials from the request to find user in the db
 	// check credentials, return user (without credentials) or nil if not found/not matching
 	// the bid argument may be used to link the anonymous BrowserUser (BIDuser)
@@ -313,10 +333,11 @@ func ForgotPasswordHandler(passtokenHandler http.HandlerFunc) http.HandlerFunc {
 		}
 		setBIDCookie(w, bid)
 
-		var token string
-		user := defaultUserStore.FindUserCreds(r, bid)
-		if user != nil {
-			token = generateID()
+		token := generateID()
+		user := defaultUserStore.BindToken(r, token, bid)
+		if user == nil {
+			//reset token to empty if user not found
+			token = ""
 		}
 
 		// save token in context

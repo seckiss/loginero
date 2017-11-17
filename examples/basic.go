@@ -18,7 +18,7 @@ func main() {
 	// after logout redirect to login form
 	http.Handle("/logout", loginero.LogoutHandler("/loginform"))
 	http.Handle("/reset", loginero.ResetPasswordHandler("/page", "/resetform"))
-	http.Handle("/forgot", loginero.ForgotPasswordHandler("/loginform", "/forgotform"))
+	http.Handle("/forgot", loginero.ForgotPasswordHandler(passtokenHandler))
 
 	/////////////////////////////////////////////////////////////////////////////
 	// expected GET requests
@@ -85,9 +85,16 @@ func htmlHandler(html string) http.HandlerFunc {
 }
 
 func loggedHandler(w http.ResponseWriter, r *http.Request) {
+	//loginero.CurrentUser(r)
 	htmlHandler("Hey! I'm logged in!")(w, r)
 }
 
 func unloggedHandler(w http.ResponseWriter, r *http.Request) {
-	htmlHandler("Logged out")(w, r)
+	//loginero.CurrentUser(r) - here it should be anonymous user
+	htmlHandler("Logged out. Current user: ")(w, r)
+}
+
+func passtokenHandler(w http.ResponseWriter, r *http.Request) {
+	//loginero.Token(r)
+	htmlHandler("Send token url to the user")(w, r)
 }

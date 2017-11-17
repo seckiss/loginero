@@ -100,23 +100,76 @@ func (store *RamUserStore) FindUserCreds(r *http.Request, bid string) interface{
 }
 
 func (store *RamUserStore) ResetUserCreds(r *http.Request, bid string) interface{} {
+	pass1 := r.FormValue("pass1")
+	pass2 := r.FormValue("pass2")
+	token := r.FormValue("token")
+	if pass1 == pass2 {
+		store.ResetMutex.Lock()
+		defer store.ResetMutex.Unlock()
+		user, pres := store.ResetToken2User[token]
+		if pres {
+			// it's one-time user token, so delete if found
+			delete(store.ResetToken2User, token)
+			updated := user.(SimpleUser)
+			updated.Password = pass1
+			// TODO check if need to update/remove record in Sid2User, Bid2User, Uid2User
+			return updated
+		}
+	}
 	return nil
 }
+
 func (store *RamUserStore) GetSessionUser(sid string) interface{} {
+	if sid != "" {
+		store.SidMutex.RLock()
+		defer store.SidMutex.RUnlock()
+		user, pres := store.Sid2User[sid]
+		if pres {
+			return user
+		}
+	}
 	return nil
 }
+
 func (store *RamUserStore) GetBrowserUser(bid string) interface{} {
+	if bid != "" {
+		store.BidMutex.RLock()
+		defer store.BidMutex.RUnlock()
+		user, pres := store.Bid2User[bid]
+		if pres {
+			return user
+		}
+	}
 	return nil
 }
+
 func (store *RamUserStore) SaveSessionUser(sid string, user interface{}) {
-
+	if sid != "" {
+		store.SidMutex.Lock()
+		defer store.SidMutex.Unlock()
+		store.Sid2User[sid] = user
+	}
 }
+
 func (store *RamUserStore) CreateBrowserUser(bid string) interface{} {
+	// For anonymous user we use the same struct as for logged user
+	// This is an implementation detail (other implementations may return a different struct)
+	if bid != "" {
+		user := SimpleUser{Username: bid, Password: ""}
+		store.BidMutex.Lock()
+		defer store.BidMutex.Unlock()
+		store.Bid2User[bid] = user
+		return user
+	}
 	return nil
-
 }
-func (store *RamUserStore) DeleteSessionUser(sid string) {
 
+func (store *RamUserStore) DeleteSessionUser(sid string) {
+	if sid != "" {
+		store.SidMutex.Lock()
+		defer store.SidMutex.Unlock()
+		delete(store.Sid2User, sid)
+	}
 }
 
 /////////////////////////////////////////////////////

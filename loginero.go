@@ -16,6 +16,10 @@ var b62regexp = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
 var defaultUserStore = NewRamUserStore()
 var sidName = "LO_SID"
 var bidName = "LO_BID"
+var contextUser = make(map[*http.Request]interface{})
+var contextUserMutex sync.RWMutex
+var contextToken = make(map[*http.Request]string)
+var contextTokenMutex sync.RWMutex
 
 func init() {
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
@@ -28,13 +32,24 @@ func init() {
 // Generate random string
 // 16-chars of base62 gives about 95.3 bits of entropy
 // This gives the space of about 10^10 generated ids with probability of collision = 10^-9 according to birthday paradox calcs
-// This is public function because it may be used to generate one-time reset tokens for password reset
-func GenerateID() string {
+func generateID() string {
 	var b = make([]byte, 16)
 	for i := 0; i < 16; i++ {
 		b[i] = b62ascii[mrand.Intn(62)]
 	}
 	return string(b)
+}
+
+func CurrentUser(r *http.Request) interface{} {
+	contextUserMutex.RLock()
+	defer contextUserMutex.RUnlock()
+	return contextUser[r]
+}
+
+func Token(r *http.Request) string {
+	contextTokenMutex.RLock()
+	defer contextTokenMutex.RUnlock()
+	return contextToken[r]
 }
 
 func SetOptions() {
@@ -223,12 +238,12 @@ func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc 
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
-			bid = GenerateID()
+			bid = generateID()
 		}
 		setBIDCookie(w, bid)
 		user := defaultUserStore.CheckUserCreds(r, bid)
 		if user != nil {
-			sid := GenerateID()
+			sid := generateID()
 			setSIDCookie(w, sid)
 			defaultUserStore.SaveSessionUser(sid, user)
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
@@ -249,12 +264,12 @@ func CreateAccountHandler(redirectSuccess string, redirectFail string) http.Hand
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
-			bid = GenerateID()
+			bid = generateID()
 		}
 		setBIDCookie(w, bid)
 		user := defaultUserStore.CreateUserCreds(r, bid)
 		if user != nil {
-			sid := GenerateID()
+			sid := generateID()
 			setSIDCookie(w, sid)
 			defaultUserStore.SaveSessionUser(sid, user)
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
@@ -275,12 +290,12 @@ func ResetPasswordHandler(redirectSuccess string, redirectFail string) http.Hand
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
-			bid = GenerateID()
+			bid = generateID()
 		}
 		setBIDCookie(w, bid)
 		user := defaultUserStore.ResetUserCreds(r, bid)
 		if user != nil {
-			sid := GenerateID()
+			sid := generateID()
 			setSIDCookie(w, sid)
 			defaultUserStore.SaveSessionUser(sid, user)
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
@@ -302,17 +317,25 @@ func ForgotPasswordHandler(passtokenHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
-			bid = GenerateID()
+			bid = generateID()
 		}
 		setBIDCookie(w, bid)
 
 		user := defaultUserStore.FindUserCreds(r, bid)
 		if user != nil {
-			token := GenerateID()
-			//TODO save token in context[r]
-			_ = token
+			token := generateID()
+
+			// save token in context
+			contextTokenMutex.Lock()
+			contextToken[r] = token
+			contextTokenMutex.Unlock()
+
 			passtokenHandler(w, r)
-			//TODO delete token from context[r]
+
+			// delete token in context
+			contextTokenMutex.Lock()
+			delete(contextToken, r)
+			contextTokenMutex.Unlock()
 		}
 	}
 }
@@ -321,7 +344,7 @@ func LogoutHandler(redirectSuccess string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
-			bid = GenerateID()
+			bid = generateID()
 		}
 		setBIDCookie(w, bid)
 		sid := getRequestSID(r)
@@ -352,15 +375,28 @@ func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFun
 
 		bid := getRequestBID(r)
 		if bid == "" {
-			bid = GenerateID()
+			bid = generateID()
 			user = defaultUserStore.CreateBrowserUser(bid)
 		} else {
 			user = defaultUserStore.GetBrowserUser(bid)
 		}
 		setBIDCookie(w, bid)
-		//TODO save user data in context[r]
+
+		//save user data in context
+		if user != nil {
+			contextUserMutex.Lock()
+			contextUser[r] = user
+			contextUserMutex.Unlock()
+		}
+
 		unloggedHandler(w, r)
-		//TODO delete user data from context[r]
+
+		//delete user data from context
+		if user != nil {
+			contextUserMutex.Lock()
+			delete(contextUser, r)
+			contextUserMutex.Unlock()
+		}
 	}
 }
 

@@ -323,7 +323,7 @@ func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFun
 
 func getRequestBID(r *http.Request) string {
 	c, err := r.Cookie(bidName)
-	if err != nil && validatedID(c.Value) {
+	if err == nil && validatedID(c.Value) {
 		return c.Value
 	}
 	return ""
@@ -331,7 +331,7 @@ func getRequestBID(r *http.Request) string {
 
 func getRequestSID(r *http.Request) string {
 	c, err := r.Cookie(sidName)
-	if err != nil && validatedID(c.Value) {
+	if err == nil && validatedID(c.Value) {
 		return c.Value
 	}
 	return ""

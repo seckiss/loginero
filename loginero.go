@@ -11,6 +11,21 @@ import (
 	"sync"
 )
 
+//TODO:
+// There are a few missing features:
+// 1) Terminate all sessions of the user
+// 2) Remove stale records in Sid2User after password reset (related to no 1)
+// 3) reporting errors from UserStore - need API change
+// 4) use different UserStore than default
+
+// To solve the above need to change API and implementation:
+// - UserStore API to return errors
+// - UserStore API to return identity (unique user string like username/email)
+// and have another Get/Set methods to access actual
+// - split store to SessionStore and UserStore
+// - Configuration options: passing UserStore
+// - the only external interface/API should be a key-value store
+
 var b62ascii = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
 var b62regexp = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
 var defaultUserStore = NewRamUserStore()

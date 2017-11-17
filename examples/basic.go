@@ -14,10 +14,11 @@ func main() {
 	// expected POST requests
 	/////////////////////////////////////////////////////////////////////////////
 	http.Handle("/login", loginero.LoginHandler("/page", "/loginform?failed=1"))
-	http.Handle("/createaccount", loginero.CreateAccountHandler("/page", "/createaccountform?failed=1"))
+	http.Handle("/create", loginero.CreateAccountHandler("/page", "/createform?failed=1"))
 	// after logout redirect to login form
 	http.Handle("/logout", loginero.LogoutHandler("/loginform"))
-	http.Handle("/resetpassword", loginero.ResetPasswordHandler("/page", "/resetpasswordform"))
+	http.Handle("/reset", loginero.ResetPasswordHandler("/page", "/resetform"))
+	http.Handle("/forgot", loginero.ForgotPasswordHandler("/loginform", "/forgotform"))
 
 	/////////////////////////////////////////////////////////////////////////////
 	// expected GET requests
@@ -28,13 +29,28 @@ func main() {
       <label style="color: red;"></label>
       <div>Username: <input type="text" name="username"></input></div>
       <div>Password: <input type="password" name="pass1"></input></div>
-      <div>Repeat: <input type="password" name="pass2"></input></div>
       <div><input type="submit" value="Log in"></input></div>
     </form>
     <script>
       let params = (new URL(location)).searchParams;
       if (params.get('failed') == '1') {
         document.querySelector('label').textContent = 'Login failed'
+      }
+    </script>
+  `))
+
+	http.Handle("/createform", htmlHandler(`
+    <form action="/create" method="POST">
+      <label style="color: red;"></label>
+      <div>Username: <input type="text" name="username"></input></div>
+      <div>Password: <input type="password" name="pass1"></input></div>
+      <div>Repeat: <input type="password" name="pass2"></input></div>
+      <div><input type="submit" value="Create Account"></input></div>
+    </form>
+    <script>
+      let params = (new URL(location)).searchParams;
+      if (params.get('failed') == '1') {
+        document.querySelector('label').textContent = 'Account could not be created'
       }
     </script>
   `))
@@ -69,7 +85,9 @@ func htmlHandler(html string) http.HandlerFunc {
 }
 
 func loggedHandler(w http.ResponseWriter, r *http.Request) {
+	htmlHandler("Hey! I'm logged in!")(w, r)
 }
 
 func unloggedHandler(w http.ResponseWriter, r *http.Request) {
+	htmlHandler("Logged out")(w, r)
 }

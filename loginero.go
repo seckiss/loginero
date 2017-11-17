@@ -13,7 +13,7 @@ import (
 
 var b62ascii = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
 var b62regexp = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
-var defaultUserStore = RamUserStore{}
+var defaultUserStore = NewRamUserStore()
 var sidName = "LO_SID"
 var bidName = "LO_BID"
 
@@ -65,6 +65,15 @@ type RamUserStore struct {
 	// In full implementation entries should have expiry timeout
 	ResetToken2User map[string]interface{}
 	ResetMutex      sync.RWMutex
+}
+
+func NewRamUserStore() *RamUserStore {
+	return &RamUserStore{
+		Uid2User:        make(map[string]interface{}),
+		Bid2User:        make(map[string]interface{}),
+		Sid2User:        make(map[string]interface{}),
+		ResetToken2User: make(map[string]interface{}),
+	}
 }
 
 func (store *RamUserStore) CreateUserCreds(r *http.Request, bid string) interface{} {

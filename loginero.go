@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	crand "crypto/rand"
-	"fmt"
 	"math"
 	"math/big"
 	mrand "math/rand"
@@ -143,14 +142,10 @@ func (store *RamUserStore) ResetUserCreds(r *http.Request, bid string) interface
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")
 	token := r.FormValue("token")
-	fmt.Printf("r=%+v\n", r)
-	fmt.Println("1111")
 	if pass1 == pass2 {
-		fmt.Println("222")
 		store.ResetMutex.Lock()
 		defer store.ResetMutex.Unlock()
 		user, pres := store.ResetToken2User[token]
-		fmt.Printf("rtu=%+v\n", store.ResetToken2User)
 		if pres {
 			// it's one-time user token, so delete if found
 			delete(store.ResetToken2User, token)
@@ -415,8 +410,6 @@ func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFun
 		contextUserMutex.Lock()
 		contextUser[r] = user
 		contextUserMutex.Unlock()
-
-		fmt.Printf("user=%+v\n", user)
 
 		unloggedHandler(w, r)
 

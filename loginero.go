@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	crand "crypto/rand"
+	"fmt"
 	"math"
 	"math/big"
 	mrand "math/rand"
@@ -156,56 +157,45 @@ func (store *RamUserStore) ResetUserCreds(r *http.Request, bid string) interface
 }
 
 func (store *RamUserStore) GetSessionUser(sid string) interface{} {
-	if sid != "" {
-		store.SidMutex.RLock()
-		defer store.SidMutex.RUnlock()
-		user, pres := store.Sid2User[sid]
-		if pres {
-			return user
-		}
-	}
-	return nil
-}
-
-func (store *RamUserStore) GetBrowserUser(bid string) interface{} {
-	if bid != "" {
-		store.BidMutex.RLock()
-		defer store.BidMutex.RUnlock()
-		user, pres := store.Bid2User[bid]
-		if pres {
-			return user
-		}
-	}
-	return nil
-}
-
-func (store *RamUserStore) SaveSessionUser(sid string, user interface{}) {
-	if sid != "" {
-		store.SidMutex.Lock()
-		defer store.SidMutex.Unlock()
-		store.Sid2User[sid] = user
-	}
-}
-
-func (store *RamUserStore) CreateBrowserUser(bid string) interface{} {
-	// For anonymous user we use the same struct as for logged user
-	// This is an implementation detail (other implementations may return a different struct)
-	if bid != "" {
-		user := SimpleUser{Username: bid, Password: ""}
-		store.BidMutex.Lock()
-		defer store.BidMutex.Unlock()
-		store.Bid2User[bid] = user
+	store.SidMutex.RLock()
+	defer store.SidMutex.RUnlock()
+	user, pres := store.Sid2User[sid]
+	if pres {
 		return user
 	}
 	return nil
 }
 
-func (store *RamUserStore) DeleteSessionUser(sid string) {
-	if sid != "" {
-		store.SidMutex.Lock()
-		defer store.SidMutex.Unlock()
-		delete(store.Sid2User, sid)
+func (store *RamUserStore) GetBrowserUser(bid string) interface{} {
+	store.BidMutex.RLock()
+	defer store.BidMutex.RUnlock()
+	user, pres := store.Bid2User[bid]
+	if pres {
+		return user
 	}
+	return nil
+}
+
+func (store *RamUserStore) SaveSessionUser(sid string, user interface{}) {
+	store.SidMutex.Lock()
+	defer store.SidMutex.Unlock()
+	store.Sid2User[sid] = user
+}
+
+func (store *RamUserStore) CreateBrowserUser(bid string) interface{} {
+	// For anonymous user we use the same struct as for logged user
+	// This is an implementation detail (other implementations may return a different struct)
+	user := SimpleUser{Username: bid, Password: ""}
+	store.BidMutex.Lock()
+	defer store.BidMutex.Unlock()
+	store.Bid2User[bid] = user
+	return user
+}
+
+func (store *RamUserStore) DeleteSessionUser(sid string) {
+	store.SidMutex.Lock()
+	defer store.SidMutex.Unlock()
+	delete(store.Sid2User, sid)
 }
 
 /////////////////////////////////////////////////////
@@ -313,6 +303,8 @@ func ResetPasswordHandler(redirectSuccess string, redirectFail string) http.Hand
 }
 
 // Bind one-time token to user
+// Bound token is passed in context
+// The token is empty string if user not found
 func ForgotPasswordHandler(passtokenHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
@@ -321,22 +313,23 @@ func ForgotPasswordHandler(passtokenHandler http.HandlerFunc) http.HandlerFunc {
 		}
 		setBIDCookie(w, bid)
 
+		var token string
 		user := defaultUserStore.FindUserCreds(r, bid)
 		if user != nil {
-			token := generateID()
-
-			// save token in context
-			contextTokenMutex.Lock()
-			contextToken[r] = token
-			contextTokenMutex.Unlock()
-
-			passtokenHandler(w, r)
-
-			// delete token in context
-			contextTokenMutex.Lock()
-			delete(contextToken, r)
-			contextTokenMutex.Unlock()
+			token = generateID()
 		}
+
+		// save token in context
+		contextTokenMutex.Lock()
+		contextToken[r] = token
+		contextTokenMutex.Unlock()
+
+		passtokenHandler(w, r)
+
+		// delete token in context
+		contextTokenMutex.Lock()
+		delete(contextToken, r)
+		contextTokenMutex.Unlock()
 	}
 }
 
@@ -364,8 +357,19 @@ func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFun
 			user = defaultUserStore.GetSessionUser(sid)
 			if user != nil {
 				setSIDCookie(w, sid)
-				//TODO save user data in context[r]
+
+				//save user data in context
+				contextUserMutex.Lock()
+				contextUser[r] = user
+				contextUserMutex.Unlock()
+
 				loggedHandler(w, r)
+
+				//delete user data from context
+				contextUserMutex.Lock()
+				delete(contextUser, r)
+				contextUserMutex.Unlock()
+
 				//TODO delete user data from context[r]
 				return
 			} else {
@@ -379,24 +383,26 @@ func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFun
 			user = defaultUserStore.CreateBrowserUser(bid)
 		} else {
 			user = defaultUserStore.GetBrowserUser(bid)
+			if user == nil {
+				bid = generateID()
+				user = defaultUserStore.CreateBrowserUser(bid)
+			}
 		}
 		setBIDCookie(w, bid)
 
 		//save user data in context
-		if user != nil {
-			contextUserMutex.Lock()
-			contextUser[r] = user
-			contextUserMutex.Unlock()
-		}
+		contextUserMutex.Lock()
+		contextUser[r] = user
+		contextUserMutex.Unlock()
+
+		fmt.Printf("user=%+v\n", user)
 
 		unloggedHandler(w, r)
 
 		//delete user data from context
-		if user != nil {
-			contextUserMutex.Lock()
-			delete(contextUser, r)
-			contextUserMutex.Unlock()
-		}
+		contextUserMutex.Lock()
+		delete(contextUser, r)
+		contextUserMutex.Unlock()
 	}
 }
 

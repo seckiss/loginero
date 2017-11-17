@@ -17,7 +17,8 @@ func main() {
 	http.Handle("/create", loginero.CreateAccountHandler("/page", "/createform?failed=1"))
 	// after logout redirect to login form
 	http.Handle("/logout", loginero.LogoutHandler("/loginform"))
-	http.Handle("/reset", loginero.ResetPasswordHandler("/page", "/resetform"))
+
+	http.Handle("/reset", loginero.ResetPasswordHandler("/page", "/forgotform?failed=1"))
 	http.Handle("/forgot", loginero.ForgotPasswordHandler(passtokenHandler))
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -55,6 +56,34 @@ func main() {
     </script>
   `))
 
+	http.Handle("/forgotform", htmlHandler(`
+    <form action="/forgot" method="POST">
+      <label style="color: red;"></label>
+      <div>Username: <input type="text" name="username"></input></div>
+      <div><input type="submit" value="Remind Password"></input></div>
+    </form>
+    <script>
+      let params = (new URL(location)).searchParams;
+      if (params.get('failed') == '1') {
+        document.querySelector('label').textContent = 'Password reset failed'
+      }
+    </script>
+  `))
+
+	http.Handle("/resetform", htmlHandler(`
+    <form action="/reset" method="POST">
+      <label style="color: red;"></label>
+			<input type="hidden" name="token"></input>
+      <div>Password: <input type="password" name="pass1"></input></div>
+      <div>Repeat: <input type="password" name="pass2"></input></div>
+      <div><input type="submit" value="Reset Password"></input></div>
+    </form>
+    <script>
+      let params = (new URL(location)).searchParams;
+			document.querySelector('input[type="hidden"]').value = params.get('token');
+    </script>
+  `))
+
 	ServeHTTP("127.0.0.1:8085", nil)
 }
 
@@ -85,16 +114,21 @@ func htmlHandler(html string) http.HandlerFunc {
 }
 
 func loggedHandler(w http.ResponseWriter, r *http.Request) {
-	//loginero.CurrentUser(r)
-	htmlHandler("Hey! I'm logged in!")(w, r)
+	user := loginero.CurrentUser(r).(loginero.SimpleUser)
+	htmlHandler("Hey "+user.Username+"! You are logged in")(w, r)
 }
 
 func unloggedHandler(w http.ResponseWriter, r *http.Request) {
-	//loginero.CurrentUser(r) - here it should be anonymous user
-	htmlHandler("Logged out. Current user: ")(w, r)
+	//here it should be anonymous user
+	user := loginero.CurrentUser(r).(loginero.SimpleUser)
+	htmlHandler("Logged out. Current user: "+user.Username)(w, r)
 }
 
 func passtokenHandler(w http.ResponseWriter, r *http.Request) {
-	//loginero.Token(r)
-	htmlHandler("Send token url to the user")(w, r)
+	token := loginero.Token(r)
+	if token == "" {
+		htmlHandler("User not found")(w, r)
+	} else {
+		htmlHandler("In backend send token url to the user: http://127.0.0.1:8085/resetform?token="+token)(w, r)
+	}
 }

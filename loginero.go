@@ -95,6 +95,18 @@ func (store *RamUserStore) CreateUserCreds(r *http.Request, bid string) interfac
 
 func (store *RamUserStore) FindUserCreds(r *http.Request, bid string) interface{} {
 	username := r.FormValue("username")
+	if username != "" {
+		store.UidMutex.RLock()
+		defer store.UidMutex.RUnlock()
+		if user, pres := store.Uid2User[username]; pres {
+			return user
+		}
+	}
+	return nil
+}
+
+func (store *RamUserStore) CheckUserCreds(r *http.Request, bid string) interface{} {
+	username := r.FormValue("username")
 	pass1 := r.FormValue("pass1")
 	if username != "" && pass1 != "" {
 		store.UidMutex.RLock()
@@ -190,11 +202,13 @@ type UserStore interface {
 	// the bid argument may be used to link the anonymous BrowserUser (BIDuser)
 	// with the newly created account/user
 	CreateUserCreds(r *http.Request, bid string) interface{}
+	// use identity (username, email, etc) from the request to find user in the db
+	FindUserCreds(r *http.Request, bid string) interface{}
 	// use credentials from the request to find user in the db
-	// return it (without credentials) or nil if not found
+	// check credentials, return user (without credentials) or nil if not found/not matching
 	// the bid argument may be used to link the anonymous BrowserUser (BIDuser)
 	// with the credential based logging in user
-	FindUserCreds(r *http.Request, bid string) interface{}
+	CheckUserCreds(r *http.Request, bid string) interface{}
 	// for password Reset
 	// implementation needs to verify one-time reset token linked to particular user
 	ResetUserCreds(r *http.Request, bid string) interface{}
@@ -212,7 +226,7 @@ func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc 
 			bid = GenerateID()
 		}
 		setBIDCookie(w, bid)
-		user := defaultUserStore.FindUserCreds(r, bid)
+		user := defaultUserStore.CheckUserCreds(r, bid)
 		if user != nil {
 			sid := GenerateID()
 			setSIDCookie(w, sid)
@@ -279,6 +293,26 @@ func ResetPasswordHandler(redirectSuccess string, redirectFail string) http.Hand
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
+		}
+	}
+}
+
+// Bind one-time token to user
+func ForgotPasswordHandler(passtokenHandler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		bid := getRequestBID(r)
+		if bid == "" {
+			bid = GenerateID()
+		}
+		setBIDCookie(w, bid)
+
+		user := defaultUserStore.FindUserCreds(r, bid)
+		if user != nil {
+			token := GenerateID()
+			//TODO save token in context[r]
+			_ = token
+			passtokenHandler(w, r)
+			//TODO delete token from context[r]
 		}
 	}
 }

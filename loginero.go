@@ -1,14 +1,14 @@
 package loginero
 
 import (
-	"net/http"
-
 	crand "crypto/rand"
 	"math"
 	"math/big"
 	mrand "math/rand"
+	"net/http"
 	"regexp"
 	"sync"
+	"time"
 )
 
 //TODO:
@@ -28,11 +28,14 @@ import (
 
 var b62ascii = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
 var b62regexp = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
-var defaultUserStore = NewRamUserStore()
+
+//var defaultUserStore = NewRamUserStore()
+var dsm SessionManager
+var dum UserManager
 var sidName = "LO_SID"
 var bidName = "LO_BID"
-var contextUser = make(map[*http.Request]interface{})
-var contextUserMutex sync.RWMutex
+var contextSession = make(map[*http.Request]*Session)
+var contextSessionMutex sync.RWMutex
 var contextToken = make(map[*http.Request]string)
 var contextTokenMutex sync.RWMutex
 
@@ -55,10 +58,10 @@ func generateID() string {
 	return string(b)
 }
 
-func CurrentUser(r *http.Request) interface{} {
-	contextUserMutex.RLock()
-	defer contextUserMutex.RUnlock()
-	return contextUser[r]
+func CurrentSession(r *http.Request) interface{} {
+	contextSessionMutex.RLock()
+	defer contextSessionMutex.RUnlock()
+	return contextSession[r]
 }
 
 func Token(r *http.Request) string {
@@ -71,81 +74,196 @@ func SetOptions() {
 	//TODO set BID and SID cookie template (Path, Secure, HttpOnly, MaxAge, etc)
 }
 
-/////////////////////////////////////////////////////
-// Example implementation to be used for testing
-// This is insecure, naive implementation of non-durable UserStore
-/////////////////////////////////////////////////////
+type Session struct {
+	UID     string
+	Created time.Time
+	Anon    bool
+}
 
+type User interface {
+	GetUID() string
+	CheckPassword(pass string) bool
+}
 type SimpleUser struct {
-	Username string
+	UID      string
 	Password string
 }
 
-type RamUserStore struct {
-	// Registered user base with credentials (SimpleUser), uid = unique user id / username
-	Uid2User map[string]interface{}
-	UidMutex sync.RWMutex
-	// Anonymous user base (SimpleUser)
-	Bid2User map[string]interface{}
-	BidMutex sync.RWMutex
-	// Registered user session base (SimpleUser)
-	Sid2User map[string]interface{}
-	SidMutex sync.RWMutex
-	// Registered users who can reset password (SimpleUser)
-	// In full implementation entries should have expiry timeout
-	ResetToken2User map[string]interface{}
-	ResetMutex      sync.RWMutex
+func (u *SimpleUser) GetUID() string {
+	return u.UID
+}
+func (u *SimpleUser) CheckPassword(pass string) bool {
+	return pass == u.Password
 }
 
-func NewRamUserStore() *RamUserStore {
-	return &RamUserStore{
-		Uid2User:        make(map[string]interface{}),
-		Bid2User:        make(map[string]interface{}),
-		Sid2User:        make(map[string]interface{}),
-		ResetToken2User: make(map[string]interface{}),
+/////////////////////////////////////////////////////
+
+type SessionStore interface {
+	Get(k string) (*Session, error)
+	Set(k string, s *Session) error
+	Delete(k string) error
+}
+
+type SessionManager interface {
+	// use identity (username, email, etc) from the request to find user in the db
+	// and bind it to the token
+	// return bound user or nil if user not found
+	BindToken(uid string, bid string) (token string, err error)
+	FetchBound(token string, bid string) (*Session, error)
+	GetSession(sid string) (*Session, error)
+	GetAnonSession(bid string) (*Session, error)
+	CreateSession(sid string, uid string) error
+	CreateAnonSession(bid string) (*Session, error)
+	DeleteSessionUser(sid string) error
+}
+
+type StandardSessionManager struct {
+	store SessionStore
+}
+
+func (sm StandardSessionManager) BindToken(uid string, bid string) (token string, err error) {
+	token = generateID()
+	k := "tid:" + token
+	sess := Session{
+		UID:     uid,
+		Created: time.Now(),
+		Anon:    false,
 	}
+	err = sm.store.Set(k, &sess)
+	return token, err
 }
 
-func (store *RamUserStore) CreateUserCreds(r *http.Request, bid string) interface{} {
+func (sm StandardSessionManager) FetchBound(token string, bid string) (*Session, error) {
+	k := "tid:" + token
+	sess, err := sm.store.Get(k)
+	if err != nil {
+		return nil, err
+	}
+	err = sm.store.Delete(k)
+	if err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
+func (sm StandardSessionManager) GetSession(sid string) (*Session, error) {
+	k := "sid:" + sid
+	sess, err := sm.store.Get(k)
+	if err != nil {
+		return nil, err
+	}
+	if sess != nil {
+		return sess, nil
+	}
+	return nil, nil
+}
+
+func (sm StandardSessionManager) GetAnonSession(bid string) (*Session, error) {
+	k := "bid:" + bid
+	sess, err := sm.store.Get(k)
+	if err != nil {
+		return nil, err
+	}
+	if sess != nil {
+		return sess, nil
+	}
+	return nil, nil
+}
+
+func (sm StandardSessionManager) CreateSession(sid string, uid string) error {
+	k := "sid:" + sid
+	sess := Session{
+		UID:     uid,
+		Created: time.Now(),
+		Anon:    false,
+	}
+	return sm.store.Set(k, &sess)
+}
+
+func (sm StandardSessionManager) CreateAnonSession(bid string) (*Session, error) {
+	k := "bid:" + bid
+	anonSess := Session{
+		UID:     k,
+		Created: time.Now(),
+		Anon:    true,
+	}
+	err := sm.store.Set(k, &anonSess)
+	if err != nil {
+		return nil, err
+	}
+	return &anonSess, nil
+}
+
+func (sm StandardSessionManager) DeleteSession(sid string) error {
+	k := "sid:" + sid
+	err := sm.store.Delete(k)
+	return err
+}
+
+type UserManager interface {
+	UserExists(uid string) bool
+	UpdatePassword(uid string, pass string) User
+	// use credentials from the request to create the new user object
+	// store it in db and return it (without credentials)
+	// return nil if user already exists (unique by username/email/id etc)
+	// the bid argument may be used to link the anonymous BrowserUser (BIDuser)
+	// with the newly created account/user
+	CreateUser(r *http.Request, bid string) User
+	// use credentials from the request to find user in the db
+	// check credentials, return user or nil if not found/not matching
+	// the bid argument may be used to link the anonymous BrowserUser (BIDuser)
+	// with the credential based logging in user
+	CheckUserCreds(r *http.Request, bid string) User
+	// for password Reset
+	// implementation needs to verify one-time reset token linked to particular user
+	ResetUserCreds(r *http.Request, bid string) User
+}
+
+type UserStore interface {
+	Get(uid string) (User, error)
+	Set(uid string, u User) error
+}
+
+type StandardUserManager struct {
+	store UserStore
+}
+
+func (um *StandardUserManager) UserExists(uid string) bool {
+	//TODO implement
+	return false
+}
+
+func (um *StandardUserManager) UpdatePassword(uid string, pass string) User {
+	//TODO implement
+	return nil
+}
+
+func (um *StandardUserManager) CreateUser(r *http.Request, bid string) User {
 	username := r.FormValue("username")
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")
+	//TODO make it atomic, add um.store mutex
 	if username != "" && pass1 == pass2 {
-		store.UidMutex.Lock()
-		defer store.UidMutex.Unlock()
-		if _, pres := store.Uid2User[username]; !pres {
+		user, err := um.store.Get(username)
+		//TODO handle error
+		if user == nil {
 			// ok, username does not exist yet
-			newuser := SimpleUser{Username: username, Password: pass1}
-			store.Uid2User[username] = newuser
-			return newuser
+			newuser := SimpleUser{UID: username, Password: pass1}
+			um.store.Set(username, &newuser)
+			return &newuser
 		}
 	}
 	return nil
 }
 
-func (store *RamUserStore) BindToken(r *http.Request, token string, bid string) interface{} {
-	username := r.FormValue("username")
-	if username != "" {
-		store.UidMutex.RLock()
-		defer store.UidMutex.RUnlock()
-		if user, pres := store.Uid2User[username]; pres {
-			store.ResetMutex.Lock()
-			defer store.ResetMutex.Unlock()
-			store.ResetToken2User[token] = user
-			return user
-		}
-	}
-	return nil
-}
-
-func (store *RamUserStore) CheckUserCreds(r *http.Request, bid string) interface{} {
+func (um *StandardUserManager) CheckUserCreds(r *http.Request, bid string) User {
 	username := r.FormValue("username")
 	pass1 := r.FormValue("pass1")
 	if username != "" && pass1 != "" {
-		store.UidMutex.RLock()
-		defer store.UidMutex.RUnlock()
-		if user, pres := store.Uid2User[username]; pres {
-			if pass1 == user.(SimpleUser).Password {
+		user, err := um.store.Get(username)
+		//TODO handle error
+		if user != nil {
+			if user.CheckPassword(pass1) {
 				return user
 			}
 		}
@@ -153,106 +271,27 @@ func (store *RamUserStore) CheckUserCreds(r *http.Request, bid string) interface
 	return nil
 }
 
-func (store *RamUserStore) ResetUserCreds(r *http.Request, bid string) interface{} {
+func (um *StandardUserManager) ResetUserCreds(r *http.Request, bid string) User {
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")
 	token := r.FormValue("token")
 	if pass1 == pass2 {
-		store.ResetMutex.Lock()
-		defer store.ResetMutex.Unlock()
-		user, pres := store.ResetToken2User[token]
-		if pres {
-			// it's one-time user token, so delete if found
-			delete(store.ResetToken2User, token)
-			updated := user.(SimpleUser)
-			updated.Password = pass1
-
-			// note that in case of RamUserStore we could operate on *User and not User
-			// in this way we could avoid updating Uid2User map (single instance of object in RAM and maps could keep only references)
-			// but in general case (disk/db implementation) it would not work
-			// so we do this step here as well to make the example complete
-
-			store.UidMutex.Lock()
-			defer store.UidMutex.Unlock()
-			store.Uid2User[updated.Username] = updated
-
-			// note that we cannot update user records in Sid2User
-			// Bid2User does not matter because it does not contain passwords
-			return updated
+		sess, err := dsm.FetchBound(token, bid)
+		if sess != nil {
+			user := um.UpdatePassword(sess.UID, pass1)
+			if user != nil {
+				return user
+			}
 		}
 	}
 	return nil
 }
 
-func (store *RamUserStore) GetSessionUser(sid string) interface{} {
-	store.SidMutex.RLock()
-	defer store.SidMutex.RUnlock()
-	user, pres := store.Sid2User[sid]
-	if pres {
-		return user
-	}
-	return nil
-}
-
-func (store *RamUserStore) GetBrowserUser(bid string) interface{} {
-	store.BidMutex.RLock()
-	defer store.BidMutex.RUnlock()
-	user, pres := store.Bid2User[bid]
-	if pres {
-		return user
-	}
-	return nil
-}
-
-func (store *RamUserStore) SaveSessionUser(sid string, user interface{}) {
-	store.SidMutex.Lock()
-	defer store.SidMutex.Unlock()
-	store.Sid2User[sid] = user
-}
-
-func (store *RamUserStore) CreateBrowserUser(bid string) interface{} {
-	// For anonymous user we use the same struct as for logged user
-	// This is an implementation detail (other implementations may return a different struct)
-	user := SimpleUser{Username: bid, Password: ""}
-	store.BidMutex.Lock()
-	defer store.BidMutex.Unlock()
-	store.Bid2User[bid] = user
-	return user
-}
-
-func (store *RamUserStore) DeleteSessionUser(sid string) {
-	store.SidMutex.Lock()
-	defer store.SidMutex.Unlock()
-	delete(store.Sid2User, sid)
-}
-
-/////////////////////////////////////////////////////
-
-type UserStore interface {
-	// use credentials from the request to create the new user object
-	// store it in db and return it (without credentials)
-	// return nil if user already exists (unique by username/email/id etc)
-	// the bid argument may be used to link the anonymous BrowserUser (BIDuser)
-	// with the newly created account/user
-	CreateUserCreds(r *http.Request, bid string) interface{}
-	// use identity (username, email, etc) from the request to find user in the db
-	// and bind it to the token
-	// return bound user or nil if user not found
-	BindToken(r *http.Request, token string, bid string) interface{}
-	// use credentials from the request to find user in the db
-	// check credentials, return user (without credentials) or nil if not found/not matching
-	// the bid argument may be used to link the anonymous BrowserUser (BIDuser)
-	// with the credential based logging in user
-	CheckUserCreds(r *http.Request, bid string) interface{}
-	// for password Reset
-	// implementation needs to verify one-time reset token linked to particular user
-	ResetUserCreds(r *http.Request, bid string) interface{}
-	GetSessionUser(sid string) interface{}
-	GetBrowserUser(bid string) interface{}
-	SaveSessionUser(sid string, user interface{})
-	CreateBrowserUser(bid string) interface{}
-	DeleteSessionUser(sid string)
-}
+/////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////
+// Handlers
+/////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////
 
 func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -261,18 +300,19 @@ func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc 
 			bid = generateID()
 		}
 		setBIDCookie(w, bid)
-		user := defaultUserStore.CheckUserCreds(r, bid)
+		user := dum.CheckUserCreds(r, bid)
+		//TODO handle error
 		if user != nil {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			defaultUserStore.SaveSessionUser(sid, user)
+			dsm.CreateSession(sid, user.GetUID())
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 		} else {
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				defaultUserStore.DeleteSessionUser(sid)
+				dsm.DeleteSessionUser(sid)
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
@@ -287,18 +327,18 @@ func CreateAccountHandler(redirectSuccess string, redirectFail string) http.Hand
 			bid = generateID()
 		}
 		setBIDCookie(w, bid)
-		user := defaultUserStore.CreateUserCreds(r, bid)
+		user := dum.CreateUser(r, bid)
 		if user != nil {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			defaultUserStore.SaveSessionUser(sid, user)
+			dsm.CreateSession(sid, user.GetUID())
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 		} else {
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				defaultUserStore.DeleteSessionUser(sid)
+				dsm.DeleteSessionUser(sid)
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
@@ -313,18 +353,18 @@ func ResetPasswordHandler(redirectSuccess string, redirectFail string) http.Hand
 			bid = generateID()
 		}
 		setBIDCookie(w, bid)
-		user := defaultUserStore.ResetUserCreds(r, bid)
+		user := dum.ResetUserCreds(r, bid)
 		if user != nil {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			defaultUserStore.SaveSessionUser(sid, user)
+			dsm.CreateSession(sid, user.GetUID())
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 		} else {
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				defaultUserStore.DeleteSessionUser(sid)
+				dsm.DeleteSessionUser(sid)
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
@@ -343,11 +383,13 @@ func ForgotPasswordHandler(passtokenHandler http.HandlerFunc) http.HandlerFunc {
 		}
 		setBIDCookie(w, bid)
 
-		token := generateID()
-		user := defaultUserStore.BindToken(r, token, bid)
-		if user == nil {
-			//reset token to empty if user not found
-			token = ""
+		var err error
+		var token string
+		uid := r.FormValue("lo_uid") //hardcoded param name for loginero user id
+		if uid != "" {
+			if dum.UserExists(uid) {
+				token, err = dsm.BindToken(uid, bid)
+			}
 		}
 
 		// save token in context
@@ -374,7 +416,7 @@ func LogoutHandler(redirectSuccess string) http.HandlerFunc {
 		sid := getRequestSID(r)
 		if sid != "" {
 			deleteSIDCookie(w)
-			defaultUserStore.DeleteSessionUser(sid)
+			dsm.DeleteSessionUser(sid)
 		}
 		http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 	}
@@ -382,26 +424,27 @@ func LogoutHandler(redirectSuccess string) http.HandlerFunc {
 
 func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var user interface{}
+		var err error
+		var sess *Session
 		sid := getRequestSID(r)
 		if sid != "" {
-			user = defaultUserStore.GetSessionUser(sid)
-			if user != nil {
+			sess, err = dsm.GetSession(sid)
+			//TODO handle error
+			if sess != nil {
 				setSIDCookie(w, sid)
 
-				//save user data in context
-				contextUserMutex.Lock()
-				contextUser[r] = user
-				contextUserMutex.Unlock()
+				//save session in context
+				contextSessionMutex.Lock()
+				contextSession[r] = sess
+				contextSessionMutex.Unlock()
 
 				loggedHandler(w, r)
 
-				//delete user data from context
-				contextUserMutex.Lock()
-				delete(contextUser, r)
-				contextUserMutex.Unlock()
+				//delete session from context
+				contextSessionMutex.Lock()
+				delete(contextSession, r)
+				contextSessionMutex.Unlock()
 
-				//TODO delete user data from context[r]
 				return
 			} else {
 				deleteSIDCookie(w)
@@ -411,27 +454,27 @@ func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFun
 		bid := getRequestBID(r)
 		if bid == "" {
 			bid = generateID()
-			user = defaultUserStore.CreateBrowserUser(bid)
+			sess, err = dsm.CreateAnonSession(bid)
 		} else {
-			user = defaultUserStore.GetBrowserUser(bid)
-			if user == nil {
+			sess, err = dsm.GetAnonSession(bid)
+			if sess == nil {
 				bid = generateID()
-				user = defaultUserStore.CreateBrowserUser(bid)
+				sess, err = dsm.CreateAnonSession(bid)
 			}
 		}
 		setBIDCookie(w, bid)
 
-		//save user data in context
-		contextUserMutex.Lock()
-		contextUser[r] = user
-		contextUserMutex.Unlock()
+		//save session in context
+		contextSessionMutex.Lock()
+		contextSession[r] = sess
+		contextSessionMutex.Unlock()
 
 		unloggedHandler(w, r)
 
-		//delete user data from context
-		contextUserMutex.Lock()
-		delete(contextUser, r)
-		contextUserMutex.Unlock()
+		//delete session from context
+		contextSessionMutex.Lock()
+		delete(contextSession, r)
+		contextSessionMutex.Unlock()
 	}
 }
 

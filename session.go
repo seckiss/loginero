@@ -11,13 +11,6 @@ var context = make(map[*http.Request]struct {
 	err  error
 })
 var contextMutex sync.RWMutex
-
-/*
-var contextSession = make(map[*http.Request]*Session)
-var contextSessionMutex sync.RWMutex
-var contextError = make(map[*http.Request]error)
-var contextErrorMutex sync.RWMutex
-*/
 var dsm SessionManager
 
 func BindToken(uid string) (token string, err error) {

@@ -122,7 +122,7 @@ func ResetPasswordHandler(redirectSuccess string, redirectFail string) http.Hand
 
 		updated := false
 		var sess *Session
-		pass, token, err := dpe.ExtractPassReset(r)
+		token, pass, err := dpe.ExtractTokenPass(r)
 		if err == nil {
 			sess, err = dsm.FetchBound(token, bid)
 			if err == nil && sess != nil {

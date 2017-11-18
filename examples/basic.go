@@ -12,18 +12,18 @@ func main() {
 	/////////////////////////////////////////////////////////////////////////////
 	// expected POST requests
 	/////////////////////////////////////////////////////////////////////////////
-	http.Handle("/login", loginero.LoginHandler("/page", "/loginform?failed=1"))
-	http.Handle("/create", loginero.CreateAccountHandler("/page", "/createform?failed=1"))
+	http.Handle("/login", loginero.LoginController("/page", "/loginform?failed=1"))
+	http.Handle("/create", loginero.CreateAccountController("/page", "/createform?failed=1"))
 	// after logout redirect to login form
-	http.Handle("/logout", loginero.LogoutHandler("/loginform"))
-	http.Handle("/reset", loginero.ResetPasswordHandler("/page", "/forgotform?failed=1"))
+	http.Handle("/logout", loginero.LogoutController("/loginform"))
+	http.Handle("/reset", loginero.ResetPasswordController("/page", "/forgotform?failed=1"))
 
 	http.HandleFunc("/forgot", passtokenHandler)
 
 	/////////////////////////////////////////////////////////////////////////////
 	// expected GET requests
 	/////////////////////////////////////////////////////////////////////////////
-	http.Handle("/page", loginero.PageHandler(loggedHandler, unloggedHandler))
+	http.Handle("/page", loginero.PageController(pageHandler))
 	http.Handle("/loginform", htmlHandler(`
     <form action="/login" method="POST">
       <label style="color: red;"></label>
@@ -101,17 +101,10 @@ func htmlHandler(html string) http.HandlerFunc {
 	}
 }
 
-func loggedHandler(w http.ResponseWriter, r *http.Request) {
+func pageHandler(w http.ResponseWriter, r *http.Request) {
 	sess, err := loginero.CurrentSession(r)
 	_ = err
-	htmlHandler("Hey "+sess.UID+"! You are logged in")(w, r)
-}
-
-func unloggedHandler(w http.ResponseWriter, r *http.Request) {
-	//here it should be anonymous user
-	sess, err := loginero.CurrentSession(r)
-	_ = err
-	htmlHandler("Logged out. Current user: "+sess.UID)(w, r)
+	htmlHandler("Current user: "+sess.UID)(w, r)
 }
 
 func passtokenHandler(w http.ResponseWriter, r *http.Request) {

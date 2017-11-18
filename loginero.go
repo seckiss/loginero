@@ -17,9 +17,6 @@ import (
 
 // To solve the above need to change API and implementation:
 // - UserStore API to return errors
-// - UserStore API to return identity (unique user string like username/email)
-// and have another Get/Set methods to access actual
-// - split store to SessionStore and UserStore
 // - Configuration options: passing UserStore
 // - the only external interface/API should be a key-value store
 
@@ -35,14 +32,7 @@ func SetOptions() {
 	//TODO set BID and SID cookie template (Path, Secure, HttpOnly, MaxAge, etc)
 }
 
-/////////////////////////////////////////////////////
-/////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////
-// Handlers
-/////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////
-
-func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc {
+func LoginController(redirectSuccess string, redirectFail string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
@@ -79,7 +69,7 @@ func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc 
 	}
 }
 
-func CreateAccountHandler(redirectSuccess string, redirectFail string) http.HandlerFunc {
+func CreateAccountController(redirectSuccess string, redirectFail string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
@@ -112,7 +102,7 @@ func CreateAccountHandler(redirectSuccess string, redirectFail string) http.Hand
 	}
 }
 
-func ResetPasswordHandler(redirectSuccess string, redirectFail string) http.HandlerFunc {
+func ResetPasswordController(redirectSuccess string, redirectFail string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
@@ -148,7 +138,45 @@ func ResetPasswordHandler(redirectSuccess string, redirectFail string) http.Hand
 	}
 }
 
-func LogoutHandler(redirectSuccess string) http.HandlerFunc {
+func PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		var sess *Session
+		sid := getRequestSID(r)
+		if sid != "" {
+			sess, err = dsm.GetSession(sid)
+			if err != nil {
+				wrapContext(pageHandler, nil, err)
+				return
+			}
+			if sess != nil {
+				setSIDCookie(w, sid)
+				wrapContext(pageHandler, sess, nil)
+				return
+			} else {
+				deleteSIDCookie(w)
+			}
+		}
+		// err and sess are nil here
+		// fallback - pass anonymous browser user
+		bid := getRequestBID(r)
+		if bid == "" {
+			bid = generateID()
+			sess, err = dsm.CreateAnonSession(bid)
+		} else {
+			sess, err = dsm.GetAnonSession(bid)
+			if err == nil && sess == nil {
+				bid = generateID()
+				sess, err = dsm.CreateAnonSession(bid)
+			}
+		}
+		setBIDCookie(w, bid)
+		wrapContext(pageHandler, sess, err)
+		return
+	}
+}
+
+func LogoutController(redirectSuccess string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
@@ -161,43 +189,5 @@ func LogoutHandler(redirectSuccess string) http.HandlerFunc {
 			dsm.DeleteSessionUser(sid)
 		}
 		http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
-	}
-}
-
-func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		var sess *Session
-		sid := getRequestSID(r)
-		if sid != "" {
-			sess, err = dsm.GetSession(sid)
-			//TODO handle error
-			if err == nil {
-				if sess != nil {
-					setSIDCookie(w, sid)
-
-					wrapContext(loggedHandler, sess, err)
-
-					return
-				} else {
-					deleteSIDCookie(w)
-				}
-			}
-		}
-		// TODO handle error, think it over
-		bid := getRequestBID(r)
-		if bid == "" {
-			bid = generateID()
-			sess, err = dsm.CreateAnonSession(bid)
-		} else {
-			sess, err = dsm.GetAnonSession(bid)
-			if sess == nil {
-				bid = generateID()
-				sess, err = dsm.CreateAnonSession(bid)
-			}
-		}
-		setBIDCookie(w, bid)
-		wrapContext(unloggedHandler, sess, err)
-
 	}
 }

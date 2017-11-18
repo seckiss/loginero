@@ -4,21 +4,9 @@ import ()
 
 var dum UserManager
 
-type User interface {
-	GetUID() string
-	CheckPassword(pass string) bool
-}
 type SimpleUser struct {
 	UID      string
 	Password string
-}
-
-func (u *SimpleUser) GetUID() string {
-	return u.UID
-}
-
-func (u *SimpleUser) CheckPassword(pass string) bool {
-	return pass == u.Password
 }
 
 // UserManager does not introduce its own errors
@@ -26,13 +14,13 @@ func (u *SimpleUser) CheckPassword(pass string) bool {
 type UserManager interface {
 	UserExists(uid string) (bool, error)
 	UpdatePassword(uid string, pass string) (bool, error)
-	CreateUser(u User, bid string) (bool, error)
+	CreateUser(user interface{}, bid string) (bool, error)
 	CredsValid(uid string, pass string, bid string) (bool, error)
 }
 
 type UserStore interface {
-	Get(uid string) (User, error)
-	Set(uid string, u User) error
+	Get(uid string) (user interface{}, err error)
+	Set(uid string, user interface{}) error
 }
 
 type StandardUserManager struct {
@@ -49,7 +37,7 @@ func (um *StandardUserManager) UpdatePassword(uid string, pass string) (bool, er
 	return false, nil
 }
 
-func (um *StandardUserManager) CreateUser(u User, bid string) (bool, error) {
+func (um *StandardUserManager) CreateUser(user interface{}, bid string) (bool, error) {
 	//TODO create user if uid does not exist
 	//			newuser := SimpleUser{UID: username, Password: pass1}
 	//			um.store.Set(username, &newuser)

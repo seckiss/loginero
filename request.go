@@ -66,7 +66,7 @@ func deleteSIDCookie(w http.ResponseWriter) {
 }
 
 type ParamExtractor interface {
-	ExtractNewUser(r *http.Request) (User, error)
+	ExtractNewUser(r *http.Request) (uid string, user interface{}, err error)
 	ExtractLogin(r *http.Request) (uid string, pass string, err error)
 	ExtractTokenPass(r *http.Request) (token string, pass string, err error)
 }
@@ -74,14 +74,14 @@ type ParamExtractor interface {
 type StandardParamExtractor struct {
 }
 
-func (pe *StandardParamExtractor) ExtractNewUser(r *http.Request) (User, error) {
+func (pe *StandardParamExtractor) ExtractNewUser(r *http.Request) (uid string, user interface{}, err error) {
 	username := r.FormValue("username")
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")
 	if username != "" && pass1 != "" && pass1 == pass2 {
-		return &SimpleUser{UID: username, Password: pass1}, nil
+		return username, &SimpleUser{UID: username, Password: pass1}, nil
 	}
-	return nil, errors.New("Wrong POST params")
+	return "", nil, errors.New("Wrong POST params")
 }
 
 func (pe *StandardParamExtractor) ExtractLogin(r *http.Request) (uid string, pass string, err error) {

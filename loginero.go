@@ -88,14 +88,14 @@ func CreateAccountHandler(redirectSuccess string, redirectFail string) http.Hand
 		setBIDCookie(w, bid)
 		var err error
 		created := false
-		user, err := dpe.ExtractNewUser(r)
+		uid, user, err := dpe.ExtractNewUser(r)
 		if err == nil {
 			created, err = dum.CreateUser(user, bid)
 		}
 		if user != nil && err == nil && created {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			dsm.CreateSession(sid, user.GetUID())
+			dsm.CreateSession(sid, uid)
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 		} else {

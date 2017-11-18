@@ -4,11 +4,6 @@ import ()
 
 var dum UserManager
 
-type SimpleUser struct {
-	UID      string
-	Password string
-}
-
 // UserManager does not introduce its own errors
 // The returned errors can be only from UserStore
 type UserManager interface {
@@ -21,6 +16,12 @@ type UserManager interface {
 type UserStore interface {
 	Get(uid string) (user interface{}, err error)
 	Set(uid string, user interface{}) error
+}
+
+// type related to particular UserManager implementation
+type SimpleUser struct {
+	UID      string
+	Password string
 }
 
 type StandardUserManager struct {

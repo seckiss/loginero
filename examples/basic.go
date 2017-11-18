@@ -5,7 +5,6 @@ import (
 	"log"
 	"loginero"
 	"net/http"
-	"net/http/httputil"
 )
 
 func main() {
@@ -95,17 +94,6 @@ func ServeHTTP(hostport string, h http.Handler) {
 	}
 }
 
-func DumpReq(r *http.Request) string {
-	var dump string
-	b, err := httputil.DumpRequest(r, true)
-	if err != nil {
-		dump = err.Error()
-	} else {
-		dump = string(b)
-	}
-	return dump
-}
-
 func htmlHandler(html string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
@@ -114,13 +102,15 @@ func htmlHandler(html string) http.HandlerFunc {
 }
 
 func loggedHandler(w http.ResponseWriter, r *http.Request) {
-	sess := loginero.CurrentSession(r)
+	sess, err := loginero.CurrentSession(r)
+	_ = err
 	htmlHandler("Hey "+sess.UID+"! You are logged in")(w, r)
 }
 
 func unloggedHandler(w http.ResponseWriter, r *http.Request) {
 	//here it should be anonymous user
-	sess := loginero.CurrentSession(r)
+	sess, err := loginero.CurrentSession(r)
+	_ = err
 	htmlHandler("Logged out. Current user: "+sess.UID)(w, r)
 }
 

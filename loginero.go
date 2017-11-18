@@ -2,6 +2,7 @@ package loginero
 
 import (
 	crand "crypto/rand"
+	"errors"
 	"math"
 	"math/big"
 	mrand "math/rand"
@@ -32,6 +33,7 @@ var b62regexp = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
 //var defaultUserStore = NewRamUserStore()
 var dsm SessionManager
 var dum UserManager
+var dpe ParamExtractor
 var sidName = "LO_SID"
 var bidName = "LO_BID"
 var contextSession = make(map[*http.Request]*Session)
@@ -92,6 +94,7 @@ type SimpleUser struct {
 func (u *SimpleUser) GetUID() string {
 	return u.UID
 }
+
 func (u *SimpleUser) CheckPassword(pass string) bool {
 	return pass == u.Password
 }
@@ -200,23 +203,59 @@ func (sm StandardSessionManager) DeleteSession(sid string) error {
 	return err
 }
 
+type ParamExtractor interface {
+	ExtractNewUser(r *http.Request) (User, error)
+	ExtractLogin(r *http.Request) (uid string, pass string, err error)
+	ExtractPassReset(r *http.Request) (pass string, token string, err error)
+	ExtractUsername(r *http.Request) (uid string, err error)
+}
+
+type StandardParamExtractor struct {
+}
+
+func (pe *StandardParamExtractor) ExtractNewUser(r *http.Request) (User, error) {
+	username := r.FormValue("username")
+	pass1 := r.FormValue("pass1")
+	pass2 := r.FormValue("pass2")
+	if username != "" && pass1 != "" && pass1 == pass2 {
+		return &SimpleUser{UID: username, Password: pass1}, nil
+	}
+	return nil, errors.New("Wrong POST params")
+}
+
+func (pe *StandardParamExtractor) ExtractLogin(r *http.Request) (uid string, pass string, err error) {
+	username := r.FormValue("username")
+	pass1 := r.FormValue("pass1")
+	if username != "" && pass1 != "" {
+		return username, pass1, nil
+	}
+	return "", "", errors.New("Wrong POST params")
+
+}
+
+func (pe *StandardParamExtractor) ExtractPassReset(r *http.Request) (pass string, token string, err error) {
+	token = r.FormValue("token")
+	pass1 := r.FormValue("pass1")
+	pass2 := r.FormValue("pass2")
+	if token != "" && pass1 != "" && pass1 == pass2 {
+		return pass1, token, nil
+	}
+	return "", "", errors.New("Wrong POST params")
+}
+
+func (pe *StandardParamExtractor) ExtractUsername(r *http.Request) (uid string, err error) {
+	username := r.FormValue("username")
+	if username != "" {
+		return username, nil
+	}
+	return "", errors.New("Wrong POST params")
+}
+
 type UserManager interface {
-	UserExists(uid string) bool
-	UpdatePassword(uid string, pass string) User
-	// use credentials from the request to create the new user object
-	// store it in db and return it (without credentials)
-	// return nil if user already exists (unique by username/email/id etc)
-	// the bid argument may be used to link the anonymous BrowserUser (BIDuser)
-	// with the newly created account/user
-	CreateUser(r *http.Request, bid string) User
-	// use credentials from the request to find user in the db
-	// check credentials, return user or nil if not found/not matching
-	// the bid argument may be used to link the anonymous BrowserUser (BIDuser)
-	// with the credential based logging in user
-	CheckUserCreds(r *http.Request, bid string) User
-	// for password Reset
-	// implementation needs to verify one-time reset token linked to particular user
-	ResetUserCreds(r *http.Request, bid string) User
+	UserExists(uid string) (bool, error)
+	UpdatePassword(uid string, pass string) (bool, error)
+	CreateUser(u User, bid string) (bool, error)
+	CredsValid(uid string, pass string, bid string) (bool, error)
 }
 
 type UserStore interface {
@@ -228,63 +267,27 @@ type StandardUserManager struct {
 	store UserStore
 }
 
-func (um *StandardUserManager) UserExists(uid string) bool {
+func (um *StandardUserManager) UserExists(uid string) (bool, error) {
 	//TODO implement
-	return false
+	return false, nil
 }
 
-func (um *StandardUserManager) UpdatePassword(uid string, pass string) User {
+func (um *StandardUserManager) UpdatePassword(uid string, pass string) (bool, error) {
 	//TODO implement
-	return nil
+	return false, nil
 }
 
-func (um *StandardUserManager) CreateUser(r *http.Request, bid string) User {
-	username := r.FormValue("username")
-	pass1 := r.FormValue("pass1")
-	pass2 := r.FormValue("pass2")
-	//TODO make it atomic, add um.store mutex
-	if username != "" && pass1 == pass2 {
-		user, err := um.store.Get(username)
-		//TODO handle error
-		if user == nil {
-			// ok, username does not exist yet
-			newuser := SimpleUser{UID: username, Password: pass1}
-			um.store.Set(username, &newuser)
-			return &newuser
-		}
-	}
-	return nil
+func (um *StandardUserManager) CreateUser(u User, bid string) (bool, error) {
+	//TODO create user if uid does not exist
+	//			newuser := SimpleUser{UID: username, Password: pass1}
+	//			um.store.Set(username, &newuser)
+	return false, nil
 }
 
-func (um *StandardUserManager) CheckUserCreds(r *http.Request, bid string) User {
-	username := r.FormValue("username")
-	pass1 := r.FormValue("pass1")
-	if username != "" && pass1 != "" {
-		user, err := um.store.Get(username)
-		//TODO handle error
-		if user != nil {
-			if user.CheckPassword(pass1) {
-				return user
-			}
-		}
-	}
-	return nil
-}
-
-func (um *StandardUserManager) ResetUserCreds(r *http.Request, bid string) User {
-	pass1 := r.FormValue("pass1")
-	pass2 := r.FormValue("pass2")
-	token := r.FormValue("token")
-	if pass1 == pass2 {
-		sess, err := dsm.FetchBound(token, bid)
-		if sess != nil {
-			user := um.UpdatePassword(sess.UID, pass1)
-			if user != nil {
-				return user
-			}
-		}
-	}
-	return nil
+func (um *StandardUserManager) CredsValid(uid string, pass string, bid string) (bool, error) {
+	// TODO uid and password check
+	//			if user.CheckPassword(pass1) {
+	return false, nil
 }
 
 /////////////////////////////////////////////////////////////
@@ -300,15 +303,24 @@ func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc 
 			bid = generateID()
 		}
 		setBIDCookie(w, bid)
-		user := dum.CheckUserCreds(r, bid)
-		//TODO handle error
-		if user != nil {
+
+		var err error
+		valid := false
+		uid, pass, err := dpe.ExtractLogin(r)
+		if err == nil {
+			valid, err = dum.CredsValid(uid, pass, bid)
+		}
+
+		if err == nil && valid {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			dsm.CreateSession(sid, user.GetUID())
+			dsm.CreateSession(sid, uid)
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
+			return
 		} else {
+
+			//TODO check err and return error code in redirectFail
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
@@ -316,6 +328,7 @@ func LoginHandler(redirectSuccess string, redirectFail string) http.HandlerFunc 
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
+			return
 		}
 	}
 }
@@ -327,14 +340,21 @@ func CreateAccountHandler(redirectSuccess string, redirectFail string) http.Hand
 			bid = generateID()
 		}
 		setBIDCookie(w, bid)
-		user := dum.CreateUser(r, bid)
-		if user != nil {
+		var err error
+		created := false
+		user, err := dpe.ExtractNewUser(r)
+		if err == nil {
+			created, err = dum.CreateUser(user, bid)
+		}
+		if user != nil && err == nil && created {
 			sid := generateID()
 			setSIDCookie(w, sid)
 			dsm.CreateSession(sid, user.GetUID())
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 		} else {
+			//TODO check err and return error code in redirectFail
+
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
@@ -353,11 +373,21 @@ func ResetPasswordHandler(redirectSuccess string, redirectFail string) http.Hand
 			bid = generateID()
 		}
 		setBIDCookie(w, bid)
-		user := dum.ResetUserCreds(r, bid)
-		if user != nil {
+
+		updated := false
+		var sess *Session
+		pass, token, err := dpe.ExtractPassReset(r)
+		if err == nil {
+			sess, err = dsm.FetchBound(token, bid)
+			if err == nil && sess != nil {
+				updated, err = dum.UpdatePassword(sess.UID, pass)
+			}
+		}
+
+		if err == nil && sess != nil && updated {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			dsm.CreateSession(sid, user.GetUID())
+			dsm.CreateSession(sid, sess.UID)
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 		} else {
@@ -383,11 +413,12 @@ func ForgotPasswordHandler(passtokenHandler http.HandlerFunc) http.HandlerFunc {
 		}
 		setBIDCookie(w, bid)
 
-		var err error
 		var token string
-		uid := r.FormValue("lo_uid") //hardcoded param name for loginero user id
-		if uid != "" {
-			if dum.UserExists(uid) {
+		var err error
+		uid, err := dpe.ExtractUsername(r)
+		if err == nil && uid != "" {
+			exists, err := dum.UserExists(uid)
+			if err == nil && exists {
 				token, err = dsm.BindToken(uid, bid)
 			}
 		}
@@ -430,27 +461,29 @@ func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFun
 		if sid != "" {
 			sess, err = dsm.GetSession(sid)
 			//TODO handle error
-			if sess != nil {
-				setSIDCookie(w, sid)
+			if err == nil {
+				if sess != nil {
+					setSIDCookie(w, sid)
 
-				//save session in context
-				contextSessionMutex.Lock()
-				contextSession[r] = sess
-				contextSessionMutex.Unlock()
+					//save session in context
+					contextSessionMutex.Lock()
+					contextSession[r] = sess
+					contextSessionMutex.Unlock()
 
-				loggedHandler(w, r)
+					loggedHandler(w, r)
 
-				//delete session from context
-				contextSessionMutex.Lock()
-				delete(contextSession, r)
-				contextSessionMutex.Unlock()
+					//delete session from context
+					contextSessionMutex.Lock()
+					delete(contextSession, r)
+					contextSessionMutex.Unlock()
 
-				return
-			} else {
-				deleteSIDCookie(w)
+					return
+				} else {
+					deleteSIDCookie(w)
+				}
 			}
 		}
-
+		// TODO handle error, think it over
 		bid := getRequestBID(r)
 		if bid == "" {
 			bid = generateID()

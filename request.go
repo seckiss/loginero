@@ -69,7 +69,6 @@ type ParamExtractor interface {
 	ExtractNewUser(r *http.Request) (User, error)
 	ExtractLogin(r *http.Request) (uid string, pass string, err error)
 	ExtractPassReset(r *http.Request) (pass string, token string, err error)
-	ExtractUsername(r *http.Request) (uid string, err error)
 }
 
 type StandardParamExtractor struct {
@@ -103,14 +102,6 @@ func (pe *StandardParamExtractor) ExtractPassReset(r *http.Request) (pass string
 		return pass1, token, nil
 	}
 	return "", "", errors.New("Wrong POST params")
-}
-
-func (pe *StandardParamExtractor) ExtractUsername(r *http.Request) (uid string, err error) {
-	username := r.FormValue("username")
-	if username != "" {
-		return username, nil
-	}
-	return "", errors.New("Wrong POST params")
 }
 
 ////////////

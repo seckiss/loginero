@@ -6,45 +6,47 @@ import (
 	"time"
 )
 
+var context = make(map[*http.Request]struct {
+	sess *Session
+	err  error
+})
+var contextMutex sync.RWMutex
+
+/*
 var contextSession = make(map[*http.Request]*Session)
 var contextSessionMutex sync.RWMutex
-var contextToken = make(map[*http.Request]string)
-var contextTokenMutex sync.RWMutex
+var contextError = make(map[*http.Request]error)
+var contextErrorMutex sync.RWMutex
+*/
 var dsm SessionManager
 
 func BindToken(uid string) (token string, err error) {
 	return dsm.BindToken(uid)
 }
 
-func CurrentSession(r *http.Request) interface{} {
-	contextSessionMutex.RLock()
-	defer contextSessionMutex.RUnlock()
-	return contextSession[r]
+func CurrentSession(r *http.Request) (*Session, error) {
+	contextMutex.RLock()
+	defer contextMutex.RUnlock()
+	ctx := context[r]
+	return ctx.sess, ctx.err
 }
 
-func Token(r *http.Request) string {
-	contextTokenMutex.RLock()
-	defer contextTokenMutex.RUnlock()
-	return contextToken[r]
-}
-
-func Error(r *http.Request) error {
-	return nil
-}
-
-func wrapContext(h http.HandlerFunc, sess *Session, token string, err error) http.HandlerFunc {
+func wrapContext(h http.HandlerFunc, sess *Session, err error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		//save session in context
-		contextSessionMutex.Lock()
-		contextSession[r] = sess
-		contextSessionMutex.Unlock()
+
+		contextMutex.Lock()
+		context[r] = struct {
+			sess *Session
+			err  error
+		}{sess, err}
+		contextMutex.Unlock()
 
 		h(w, r)
 
-		//delete session from context
-		contextSessionMutex.Lock()
-		delete(contextSession, r)
-		contextSessionMutex.Unlock()
+		contextMutex.Lock()
+		delete(context, r)
+		contextMutex.Unlock()
+
 	}
 }
 

@@ -17,9 +17,9 @@ func main() {
 	http.Handle("/create", loginero.CreateAccountHandler("/page", "/createform?failed=1"))
 	// after logout redirect to login form
 	http.Handle("/logout", loginero.LogoutHandler("/loginform"))
-
 	http.Handle("/reset", loginero.ResetPasswordHandler("/page", "/forgotform?failed=1"))
-	http.Handle("/forgot", loginero.ForgotPasswordHandler(passtokenHandler))
+
+	http.HandleFunc("/forgot", passtokenHandler)
 
 	/////////////////////////////////////////////////////////////////////////////
 	// expected GET requests
@@ -114,19 +114,21 @@ func htmlHandler(html string) http.HandlerFunc {
 }
 
 func loggedHandler(w http.ResponseWriter, r *http.Request) {
-	user := loginero.CurrentUser(r).(loginero.SimpleUser)
-	htmlHandler("Hey "+user.Username+"! You are logged in")(w, r)
+	sess := loginero.CurrentSession(r)
+	htmlHandler("Hey "+sess.UID+"! You are logged in")(w, r)
 }
 
 func unloggedHandler(w http.ResponseWriter, r *http.Request) {
 	//here it should be anonymous user
-	user := loginero.CurrentUser(r).(loginero.SimpleUser)
-	htmlHandler("Logged out. Current user: "+user.Username)(w, r)
+	sess := loginero.CurrentSession(r)
+	htmlHandler("Logged out. Current user: "+sess.UID)(w, r)
 }
 
 func passtokenHandler(w http.ResponseWriter, r *http.Request) {
-	token := loginero.Token(r)
-	if token == "" {
+	uid := r.FormValue("username")
+	token, err := loginero.BindToken(uid)
+	// think over error reporting and semantics
+	if err != nil || token == "" {
 		htmlHandler("User not found")(w, r)
 	} else {
 		htmlHandler("In backend send token url to the user: http://127.0.0.1:8085/resetform?token="+token)(w, r)

@@ -148,41 +148,6 @@ func ResetPasswordHandler(redirectSuccess string, redirectFail string) http.Hand
 	}
 }
 
-// Bind one-time token to user
-// Bound token is passed in context
-// The token is empty string if user not found
-func ForgotPasswordHandler(passtokenHandler http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		bid := getRequestBID(r)
-		if bid == "" {
-			bid = generateID()
-		}
-		setBIDCookie(w, bid)
-
-		var token string
-		var err error
-		uid, err := dpe.ExtractUsername(r)
-		if err == nil && uid != "" {
-			exists, err := dum.UserExists(uid)
-			if err == nil && exists {
-				token, err = dsm.BindToken(uid)
-			}
-		}
-
-		// save token in context
-		contextTokenMutex.Lock()
-		contextToken[r] = token
-		contextTokenMutex.Unlock()
-
-		passtokenHandler(w, r)
-
-		// delete token in context
-		contextTokenMutex.Lock()
-		delete(contextToken, r)
-		contextTokenMutex.Unlock()
-	}
-}
-
 func LogoutHandler(redirectSuccess string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
@@ -211,17 +176,7 @@ func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFun
 				if sess != nil {
 					setSIDCookie(w, sid)
 
-					//save session in context
-					contextSessionMutex.Lock()
-					contextSession[r] = sess
-					contextSessionMutex.Unlock()
-
-					loggedHandler(w, r)
-
-					//delete session from context
-					contextSessionMutex.Lock()
-					delete(contextSession, r)
-					contextSessionMutex.Unlock()
+					wrapContext(loggedHandler, sess, err)
 
 					return
 				} else {
@@ -242,17 +197,7 @@ func PageHandler(loggedHandler http.HandlerFunc, unloggedHandler http.HandlerFun
 			}
 		}
 		setBIDCookie(w, bid)
+		wrapContext(unloggedHandler, sess, err)
 
-		//save session in context
-		contextSessionMutex.Lock()
-		contextSession[r] = sess
-		contextSessionMutex.Unlock()
-
-		unloggedHandler(w, r)
-
-		//delete session from context
-		contextSessionMutex.Lock()
-		delete(contextSession, r)
-		contextSessionMutex.Unlock()
 	}
 }

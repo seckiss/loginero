@@ -21,6 +21,8 @@ func (u *SimpleUser) CheckPassword(pass string) bool {
 	return pass == u.Password
 }
 
+// UserManager does not introduce its own errors
+// The returned errors can be only from UserStore
 type UserManager interface {
 	UserExists(uid string) (bool, error)
 	UpdatePassword(uid string, pass string) (bool, error)

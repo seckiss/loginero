@@ -12,6 +12,10 @@ var contextToken = make(map[*http.Request]string)
 var contextTokenMutex sync.RWMutex
 var dsm SessionManager
 
+func BindToken(uid string) (token string, err error) {
+	return dsm.BindToken(uid)
+}
+
 func CurrentSession(r *http.Request) interface{} {
 	contextSessionMutex.RLock()
 	defer contextSessionMutex.RUnlock()
@@ -22,6 +26,26 @@ func Token(r *http.Request) string {
 	contextTokenMutex.RLock()
 	defer contextTokenMutex.RUnlock()
 	return contextToken[r]
+}
+
+func Error(r *http.Request) error {
+	return nil
+}
+
+func wrapContext(h http.HandlerFunc, sess *Session, token string, err error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		//save session in context
+		contextSessionMutex.Lock()
+		contextSession[r] = sess
+		contextSessionMutex.Unlock()
+
+		h(w, r)
+
+		//delete session from context
+		contextSessionMutex.Lock()
+		delete(contextSession, r)
+		contextSessionMutex.Unlock()
+	}
 }
 
 type Session struct {
@@ -37,10 +61,7 @@ type SessionStore interface {
 }
 
 type SessionManager interface {
-	// use identity (username, email, etc) from the request to find user in the db
-	// and bind it to the token
-	// return bound user or nil if user not found
-	BindToken(uid string, bid string) (token string, err error)
+	BindToken(uid string) (token string, err error)
 	FetchBound(token string, bid string) (*Session, error)
 	GetSession(sid string) (*Session, error)
 	GetAnonSession(bid string) (*Session, error)

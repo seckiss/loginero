@@ -165,7 +165,7 @@ func ForgotPasswordHandler(passtokenHandler http.HandlerFunc) http.HandlerFunc {
 		if err == nil && uid != "" {
 			exists, err := dum.UserExists(uid)
 			if err == nil && exists {
-				token, err = dsm.BindToken(uid, bid)
+				token, err = dsm.BindToken(uid)
 			}
 		}
 

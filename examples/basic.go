@@ -123,6 +123,17 @@ func createAccountHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func resetHandler(w http.ResponseWriter, r *http.Request) {
+	sess, _ := loginero.CurrentSession(r)
+	if sess.Anon {
+		// unlogged, reset password failed
+		http.Redirect(w, r, "/forgotform?failed=1", http.StatusSeeOther)
+	} else {
+		// logged, password reset
+		http.Redirect(w, r, "/page", http.StatusSeeOther)
+	}
+}
+
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	//sess, _ := loginero.CurrentSession(r)
 	http.Redirect(w, r, "/loginform", http.StatusSeeOther)

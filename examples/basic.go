@@ -12,10 +12,9 @@ func main() {
 	/////////////////////////////////////////////////////////////////////////////
 	// expected POST requests
 	/////////////////////////////////////////////////////////////////////////////
-	http.Handle("/login", loginero.LoginController("/page", "/loginform?failed=1"))
-	http.Handle("/create", loginero.CreateAccountController("/page", "/createform?failed=1"))
-	// after logout redirect to login form
-	http.Handle("/logout", loginero.LogoutController("/loginform"))
+	http.Handle("/login", loginero.LoginController(loginHandler))
+	http.Handle("/create", loginero.CreateAccountController(createAccountHandler))
+	http.Handle("/logout", loginero.LogoutController(logoutHandler))
 	http.Handle("/reset", loginero.ResetPasswordController("/page", "/forgotform?failed=1"))
 
 	http.HandleFunc("/forgot", passtokenHandler)
@@ -24,7 +23,7 @@ func main() {
 	// expected GET requests
 	/////////////////////////////////////////////////////////////////////////////
 	http.Handle("/page", loginero.PageController(pageHandler))
-	http.Handle("/loginform", htmlHandler(`
+	http.Handle("/loginform", handlerFromHtml(`
     <form action="/login" method="POST">
       <label style="color: red;"></label>
       <div>Username: <input type="text" name="username"></input></div>
@@ -39,7 +38,7 @@ func main() {
     </script>
   `))
 
-	http.Handle("/createform", htmlHandler(`
+	http.Handle("/createform", handlerFromHtml(`
     <form action="/create" method="POST">
       <label style="color: red;"></label>
       <div>Username: <input type="text" name="username"></input></div>
@@ -55,7 +54,7 @@ func main() {
     </script>
   `))
 
-	http.Handle("/forgotform", htmlHandler(`
+	http.Handle("/forgotform", handlerFromHtml(`
     <form action="/forgot" method="POST">
       <label style="color: red;"></label>
       <div>Username: <input type="text" name="username"></input></div>
@@ -69,7 +68,7 @@ func main() {
     </script>
   `))
 
-	http.Handle("/resetform", htmlHandler(`
+	http.Handle("/resetform", handlerFromHtml(`
     <form action="/reset" method="POST">
       <label style="color: red;"></label>
 			<input type="hidden" name="token"></input>
@@ -94,17 +93,44 @@ func ServeHTTP(hostport string, h http.Handler) {
 	}
 }
 
-func htmlHandler(html string) http.HandlerFunc {
+func handlerFromHtml(html string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(html))
 	}
 }
 
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	sess, _ := loginero.CurrentSession(r)
+	if sess.Anon {
+		// unlogged
+		http.Redirect(w, r, "/loginform?failed=1", http.StatusSeeOther)
+	} else {
+		// logged
+		http.Redirect(w, r, "/page", http.StatusSeeOther)
+	}
+}
+
+func createAccountHandler(w http.ResponseWriter, r *http.Request) {
+	sess, _ := loginero.CurrentSession(r)
+	if sess.Anon {
+		// unlogged, create account failed for client reasons
+		http.Redirect(w, r, "/createform?failed=1", http.StatusSeeOther)
+	} else {
+		// logged, account created
+		http.Redirect(w, r, "/page", http.StatusSeeOther)
+	}
+}
+
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	//sess, _ := loginero.CurrentSession(r)
+	http.Redirect(w, r, "/loginform", http.StatusSeeOther)
+}
+
 func pageHandler(w http.ResponseWriter, r *http.Request) {
 	sess, err := loginero.CurrentSession(r)
 	_ = err
-	htmlHandler("Current user: "+sess.UID)(w, r)
+	handlerFromHtml("Current user: "+sess.UID)(w, r)
 }
 
 func passtokenHandler(w http.ResponseWriter, r *http.Request) {
@@ -112,8 +138,8 @@ func passtokenHandler(w http.ResponseWriter, r *http.Request) {
 	token, err := loginero.BindToken(uid)
 	// think over error reporting and semantics
 	if err != nil || token == "" {
-		htmlHandler("User not found")(w, r)
+		handlerFromHtml("User not found")(w, r)
 	} else {
-		htmlHandler("In backend send token url to the user: http://127.0.0.1:8085/resetform?token="+token)(w, r)
+		handlerFromHtml("In backend send token url to the user: http://127.0.0.1:8085/resetform?token="+token)(w, r)
 	}
 }

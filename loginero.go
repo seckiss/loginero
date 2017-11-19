@@ -63,80 +63,75 @@ func (loginero *Loginero) BindToken(uid string) (token string, err error) {
 	return loginero.SessMan.BindToken(uid)
 }
 
-func LoginController(redirectSuccess string, redirectFail string) http.HandlerFunc {
-	return defaultInstance.LoginController(redirectSuccess, redirectFail)
+func LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
+	return defaultInstance.LoginController(loginHandler)
 }
 
-func (loginero *Loginero) LoginController(redirectSuccess string, redirectFail string) http.HandlerFunc {
+func (loginero *Loginero) LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bid := getRequestBID(r)
-		if bid == "" {
-			bid = generateID()
-		}
-		setBIDCookie(w, bid)
-
-		var err error
-		valid := false
 		uid, pass, err := loginero.ParamEx.ExtractLogin(r)
-		if err == nil {
-			valid, err = loginero.UserMan.CredsValid(uid, pass, bid)
+		if err != nil {
+			wrapContext(loginHandler, nil, err)
+			return
+		}
+		valid, err := loginero.UserMan.CredsValid(uid, pass)
+		if err != nil {
+			wrapContext(loginHandler, nil, err)
+			return
 		}
 
-		if err == nil && valid {
+		if valid {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			loginero.SessMan.CreateSession(sid, uid)
-			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
-			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
+			sess, err := loginero.SessMan.CreateSession(sid, uid)
+			wrapContext(loginHandler, sess, err)
 			return
 		} else {
-
-			//TODO check err and return error code in redirectFail
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
 				loginero.SessMan.DeleteSession(sid)
 			}
-			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
-			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
+			bid, sess, err := loginero.browserSessionFallback(r)
+			setBIDCookie(w, bid)
+			wrapContext(loginHandler, sess, err)
 			return
 		}
 	}
 }
 
-func CreateAccountController(redirectSuccess string, redirectFail string) http.HandlerFunc {
-	return defaultInstance.CreateAccountController(redirectSuccess, redirectFail)
+func CreateAccountController(createAccountHandler http.HandlerFunc) http.HandlerFunc {
+	return defaultInstance.CreateAccountController(createAccountHandler)
 }
 
-func (loginero *Loginero) CreateAccountController(redirectSuccess string, redirectFail string) http.HandlerFunc {
+func (loginero *Loginero) CreateAccountController(createAccountHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bid := getRequestBID(r)
-		if bid == "" {
-			bid = generateID()
-		}
-		setBIDCookie(w, bid)
-		var err error
-		created := false
 		uid, user, err := loginero.ParamEx.ExtractNewUser(r)
-		if err == nil {
-			created, err = loginero.UserMan.CreateUser(user, bid)
+		if err != nil {
+			wrapContext(createAccountHandler, nil, err)
+			return
 		}
-		if user != nil && err == nil && created {
+		created, err := loginero.UserMan.CreateUser(user)
+		if err != nil {
+			wrapContext(createAccountHandler, nil, err)
+			return
+		}
+		if created {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			loginero.SessMan.CreateSession(sid, uid)
-			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
-			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
+			sess, err := loginero.SessMan.CreateSession(sid, uid)
+			wrapContext(createAccountHandler, sess, err)
+			return
 		} else {
-			//TODO check err and return error code in redirectFail
-
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
 				loginero.SessMan.DeleteSession(sid)
 			}
-			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
-			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
+			bid, sess, err := loginero.browserSessionFallback(r)
+			setBIDCookie(w, bid)
+			wrapContext(createAccountHandler, sess, err)
+			return
 		}
 	}
 }
@@ -187,11 +182,9 @@ func PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
 
 func (loginero *Loginero) PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		var sess *Session
 		sid := getRequestSID(r)
 		if sid != "" {
-			sess, err = loginero.SessMan.GetSession(sid)
+			sess, err := loginero.SessMan.GetSession(sid)
 			if err != nil {
 				wrapContext(pageHandler, nil, err)
 				return
@@ -204,41 +197,43 @@ func (loginero *Loginero) PageController(pageHandler http.HandlerFunc) http.Hand
 				deleteSIDCookie(w)
 			}
 		}
-		// err and sess are nil here
-		// fallback - pass anonymous browser user
-		bid := getRequestBID(r)
-		if bid == "" {
-			bid = generateID()
-			sess, err = loginero.SessMan.CreateAnonSession(bid)
-		} else {
-			sess, err = loginero.SessMan.GetAnonSession(bid)
-			if err == nil && sess == nil {
-				bid = generateID()
-				sess, err = loginero.SessMan.CreateAnonSession(bid)
-			}
-		}
+		bid, sess, err := loginero.browserSessionFallback(r)
 		setBIDCookie(w, bid)
 		wrapContext(pageHandler, sess, err)
 		return
 	}
 }
 
-func LogoutController(redirectSuccess string) http.HandlerFunc {
-	return defaultInstance.LogoutController(redirectSuccess)
+func LogoutController(logoutHandler http.HandlerFunc) http.HandlerFunc {
+	return defaultInstance.LogoutController(logoutHandler)
 }
 
-func (loginero *Loginero) LogoutController(redirectSuccess string) http.HandlerFunc {
+func (loginero *Loginero) LogoutController(logoutHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bid := getRequestBID(r)
-		if bid == "" {
-			bid = generateID()
-		}
-		setBIDCookie(w, bid)
 		sid := getRequestSID(r)
 		if sid != "" {
 			deleteSIDCookie(w)
 			loginero.SessMan.DeleteSession(sid)
 		}
-		http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
+		bid, sess, err := loginero.browserSessionFallback(r)
+		setBIDCookie(w, bid)
+		wrapContext(logoutHandler, sess, err)
+		return
 	}
+}
+
+func (loginero *Loginero) browserSessionFallback(r *http.Request) (bid string, sess *Session, err error) {
+	// fallback - pass anonymous browser user
+	bid = getRequestBID(r)
+	if bid == "" {
+		bid = generateID()
+		sess, err = loginero.SessMan.CreateAnonSession(bid)
+	} else {
+		sess, err = loginero.SessMan.GetAnonSession(bid)
+		if err == nil && sess == nil {
+			bid = generateID()
+			sess, err = loginero.SessMan.CreateAnonSession(bid)
+		}
+	}
+	return bid, sess, err
 }

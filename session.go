@@ -82,7 +82,7 @@ type SessionManager interface {
 	FetchBound(token string, bid string) (*Session, error)
 	GetSession(sid string) (*Session, error)
 	GetAnonSession(bid string) (*Session, error)
-	CreateSession(sid string, uid string) error
+	CreateSession(sid string, uid string) (*Session, error)
 	CreateAnonSession(bid string) (*Session, error)
 	DeleteSession(sid string) error
 }
@@ -140,14 +140,14 @@ func (sm StandardSessionManager) GetAnonSession(bid string) (*Session, error) {
 	return nil, nil
 }
 
-func (sm StandardSessionManager) CreateSession(sid string, uid string) error {
+func (sm StandardSessionManager) CreateSession(sid string, uid string) (*Session, error) {
 	k := "sid:" + sid
 	sess := Session{
 		UID:     uid,
 		Created: time.Now(),
 		Anon:    false,
 	}
-	return sm.store.Set(k, &sess)
+	return &sess, sm.store.Set(k, &sess)
 }
 
 func (sm StandardSessionManager) CreateAnonSession(bid string) (*Session, error) {

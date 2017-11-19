@@ -16,6 +16,11 @@ type UserManager interface {
 type UserStore interface {
 	Get(uid string) (user interface{}, err error)
 	Set(uid string, user interface{}) error
+	Delete(uid string) error
+}
+
+func NewRamUserStore() UserStore {
+	return NewRamStore()
 }
 
 // type related to particular UserManager implementation

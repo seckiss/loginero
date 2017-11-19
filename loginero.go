@@ -26,7 +26,30 @@ func init() {
 		panic(err)
 	}
 	mrand.Seed(seed.Int64())
+
+	sessionStore := NewRamSessionStore()
+	userStore := NewRamUserStore()
+	ssm := &StandardSessionManager{
+		store: sessionStore,
+	}
+	sum := &StandardUserManager{
+		store: userStore,
+	}
+	spe := &StandardParamExtractor{}
+	defaultLo = &Loginero{
+		SessMan: ssm,
+		UserMan: sum,
+		ParamEx: spe,
+	}
 }
+
+type Loginero struct {
+	SessMan SessionManager
+	UserMan UserManager
+	ParamEx ParamExtractor
+}
+
+var defaultLo *Loginero
 
 func SetOptions() {
 	//TODO set BID and SID cookie template (Path, Secure, HttpOnly, MaxAge, etc)
@@ -60,7 +83,7 @@ func LoginController(redirectSuccess string, redirectFail string) http.HandlerFu
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				dsm.DeleteSessionUser(sid)
+				dsm.DeleteSession(sid)
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
@@ -94,7 +117,7 @@ func CreateAccountController(redirectSuccess string, redirectFail string) http.H
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				dsm.DeleteSessionUser(sid)
+				dsm.DeleteSession(sid)
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
@@ -130,7 +153,7 @@ func ResetPasswordController(redirectSuccess string, redirectFail string) http.H
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				dsm.DeleteSessionUser(sid)
+				dsm.DeleteSession(sid)
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
@@ -186,7 +209,7 @@ func LogoutController(redirectSuccess string) http.HandlerFunc {
 		sid := getRequestSID(r)
 		if sid != "" {
 			deleteSIDCookie(w)
-			dsm.DeleteSessionUser(sid)
+			dsm.DeleteSession(sid)
 		}
 		http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 	}

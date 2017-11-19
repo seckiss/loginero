@@ -11,7 +11,13 @@ var context = make(map[*http.Request]struct {
 	err  error
 })
 var contextMutex sync.RWMutex
+
+// default session manager
 var dsm SessionManager
+
+func SetSessionManager(sm SessionManager) {
+	dsm = sm
+}
 
 func BindToken(uid string) (token string, err error) {
 	return dsm.BindToken(uid)
@@ -51,8 +57,35 @@ type Session struct {
 
 type SessionStore interface {
 	Get(k string) (*Session, error)
-	Set(k string, s *Session) error
+	Set(k string, sess *Session) error
 	Delete(k string) error
+}
+
+type RamSessionStore struct {
+	KVStore *RamStore
+}
+
+func NewRamSessionStore() SessionStore {
+	return &RamSessionStore{
+		KVStore: NewRamStore(),
+	}
+}
+
+func (ss *RamSessionStore) Get(k string) (*Session, error) {
+	sess, err := ss.KVStore.Get(k)
+	if sess == nil {
+		return nil, err
+	} else {
+		return sess.(*Session), err
+	}
+}
+
+func (ss *RamSessionStore) Set(k string, sess *Session) error {
+	return ss.KVStore.Set(k, sess)
+}
+
+func (ss *RamSessionStore) Delete(k string) error {
+	return ss.KVStore.Delete(k)
 }
 
 type SessionManager interface {
@@ -62,14 +95,14 @@ type SessionManager interface {
 	GetAnonSession(bid string) (*Session, error)
 	CreateSession(sid string, uid string) error
 	CreateAnonSession(bid string) (*Session, error)
-	DeleteSessionUser(sid string) error
+	DeleteSession(sid string) error
 }
 
 type StandardSessionManager struct {
 	store SessionStore
 }
 
-func (sm StandardSessionManager) BindToken(uid string, bid string) (token string, err error) {
+func (sm StandardSessionManager) BindToken(uid string) (token string, err error) {
 	token = generateID()
 	k := "tid:" + token
 	sess := Session{

@@ -103,5 +103,3 @@ func (pe *StandardParamExtractor) ExtractTokenPass(r *http.Request) (token strin
 	}
 	return "", "", errors.New("Wrong POST params")
 }
-
-////////////

@@ -79,7 +79,7 @@ func (ss *RamSessionStore) Delete(k string) error {
 
 type SessionManager interface {
 	BindToken(uid string) (token string, err error)
-	FetchBound(token string, bid string) (*Session, error)
+	FetchBound(token string) (*Session, error)
 	GetSession(sid string) (*Session, error)
 	GetAnonSession(bid string) (*Session, error)
 	CreateSession(sid string, uid string) (*Session, error)
@@ -103,7 +103,7 @@ func (sm StandardSessionManager) BindToken(uid string) (token string, err error)
 	return token, err
 }
 
-func (sm StandardSessionManager) FetchBound(token string, bid string) (*Session, error) {
+func (sm StandardSessionManager) FetchBound(token string) (*Session, error) {
 	k := "tid:" + token
 	sess, err := sm.store.Get(k)
 	if err != nil {

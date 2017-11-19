@@ -15,7 +15,8 @@ func main() {
 	http.Handle("/login", loginero.LoginController(loginHandler))
 	http.Handle("/create", loginero.CreateAccountController(createAccountHandler))
 	http.Handle("/logout", loginero.LogoutController(logoutHandler))
-	http.Handle("/reset", loginero.ResetPasswordController("/page", "/forgotform?failed=1"))
+	//http.Handle("/reset", loginero.ResetPasswordController("/page", "/forgotform?failed=1"))
+	http.Handle("/reset", loginero.ResetPasswordController(resetHandler))
 
 	http.HandleFunc("/forgot", passtokenHandler)
 

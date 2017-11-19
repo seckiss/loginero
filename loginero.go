@@ -136,43 +136,46 @@ func (loginero *Loginero) CreateAccountController(createAccountHandler http.Hand
 	}
 }
 
-func ResetPasswordController(redirectSuccess string, redirectFail string) http.HandlerFunc {
-	return defaultInstance.ResetPasswordController(redirectSuccess, redirectFail)
+func ResetPasswordController(resetHandler http.HandlerFunc) http.HandlerFunc {
+	return defaultInstance.ResetPasswordController(resetHandler)
 }
 
-func (loginero *Loginero) ResetPasswordController(redirectSuccess string, redirectFail string) http.HandlerFunc {
+func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bid := getRequestBID(r)
-		if bid == "" {
-			bid = generateID()
-		}
-		setBIDCookie(w, bid)
-
-		updated := false
-		var sess *Session
 		token, pass, err := loginero.ParamEx.ExtractTokenPass(r)
-		if err == nil {
-			sess, err = loginero.SessMan.FetchBound(token, bid)
-			if err == nil && sess != nil {
-				updated, err = loginero.UserMan.UpdatePassword(sess.UID, pass)
+		if err != nil {
+			wrapContext(resetHandler, nil, err)
+			return
+		}
+		sess, err := loginero.SessMan.FetchBound(token)
+		if err != nil {
+			wrapContext(resetHandler, nil, err)
+			return
+		}
+		if sess != nil {
+			updated, err := loginero.UserMan.UpdatePassword(sess.UID, pass)
+			if err != nil {
+				wrapContext(resetHandler, nil, err)
+				return
+			}
+			if updated {
+				sid := generateID()
+				setSIDCookie(w, sid)
+				sess, err := loginero.SessMan.CreateSession(sid, sess.UID)
+				wrapContext(resetHandler, sess, err)
+				return
 			}
 		}
 
-		if err == nil && sess != nil && updated {
-			sid := generateID()
-			setSIDCookie(w, sid)
-			loginero.SessMan.CreateSession(sid, sess.UID)
-			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
-			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
-		} else {
-			sid := getRequestSID(r)
-			if sid != "" {
-				deleteSIDCookie(w)
-				loginero.SessMan.DeleteSession(sid)
-			}
-			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
-			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
+		sid := getRequestSID(r)
+		if sid != "" {
+			deleteSIDCookie(w)
+			loginero.SessMan.DeleteSession(sid)
 		}
+		bid, sess, err := loginero.browserSessionFallback(r)
+		setBIDCookie(w, bid)
+		wrapContext(resetHandler, sess, err)
+		return
 	}
 }
 

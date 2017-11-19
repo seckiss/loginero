@@ -36,7 +36,7 @@ func init() {
 		store: userStore,
 	}
 	spe := &StandardParamExtractor{}
-	defaultLo = &Loginero{
+	defaultInstance = &Loginero{
 		SessMan: ssm,
 		UserMan: sum,
 		ParamEx: spe,
@@ -49,13 +49,25 @@ type Loginero struct {
 	ParamEx ParamExtractor
 }
 
-var defaultLo *Loginero
+var defaultInstance *Loginero
 
 func SetOptions() {
 	//TODO set BID and SID cookie template (Path, Secure, HttpOnly, MaxAge, etc)
 }
 
+func BindToken(uid string) (token string, err error) {
+	return defaultInstance.SessMan.BindToken(uid)
+}
+
+func (loginero *Loginero) BindToken(uid string) (token string, err error) {
+	return loginero.SessMan.BindToken(uid)
+}
+
 func LoginController(redirectSuccess string, redirectFail string) http.HandlerFunc {
+	return defaultInstance.LoginController(redirectSuccess, redirectFail)
+}
+
+func (loginero *Loginero) LoginController(redirectSuccess string, redirectFail string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
@@ -65,15 +77,15 @@ func LoginController(redirectSuccess string, redirectFail string) http.HandlerFu
 
 		var err error
 		valid := false
-		uid, pass, err := dpe.ExtractLogin(r)
+		uid, pass, err := loginero.ParamEx.ExtractLogin(r)
 		if err == nil {
-			valid, err = dum.CredsValid(uid, pass, bid)
+			valid, err = loginero.UserMan.CredsValid(uid, pass, bid)
 		}
 
 		if err == nil && valid {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			dsm.CreateSession(sid, uid)
+			loginero.SessMan.CreateSession(sid, uid)
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 			return
@@ -83,7 +95,7 @@ func LoginController(redirectSuccess string, redirectFail string) http.HandlerFu
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				dsm.DeleteSession(sid)
+				loginero.SessMan.DeleteSession(sid)
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
@@ -93,6 +105,10 @@ func LoginController(redirectSuccess string, redirectFail string) http.HandlerFu
 }
 
 func CreateAccountController(redirectSuccess string, redirectFail string) http.HandlerFunc {
+	return defaultInstance.CreateAccountController(redirectSuccess, redirectFail)
+}
+
+func (loginero *Loginero) CreateAccountController(redirectSuccess string, redirectFail string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
@@ -101,14 +117,14 @@ func CreateAccountController(redirectSuccess string, redirectFail string) http.H
 		setBIDCookie(w, bid)
 		var err error
 		created := false
-		uid, user, err := dpe.ExtractNewUser(r)
+		uid, user, err := loginero.ParamEx.ExtractNewUser(r)
 		if err == nil {
-			created, err = dum.CreateUser(user, bid)
+			created, err = loginero.UserMan.CreateUser(user, bid)
 		}
 		if user != nil && err == nil && created {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			dsm.CreateSession(sid, uid)
+			loginero.SessMan.CreateSession(sid, uid)
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 		} else {
@@ -117,7 +133,7 @@ func CreateAccountController(redirectSuccess string, redirectFail string) http.H
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				dsm.DeleteSession(sid)
+				loginero.SessMan.DeleteSession(sid)
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
@@ -126,6 +142,10 @@ func CreateAccountController(redirectSuccess string, redirectFail string) http.H
 }
 
 func ResetPasswordController(redirectSuccess string, redirectFail string) http.HandlerFunc {
+	return defaultInstance.ResetPasswordController(redirectSuccess, redirectFail)
+}
+
+func (loginero *Loginero) ResetPasswordController(redirectSuccess string, redirectFail string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
@@ -135,25 +155,25 @@ func ResetPasswordController(redirectSuccess string, redirectFail string) http.H
 
 		updated := false
 		var sess *Session
-		token, pass, err := dpe.ExtractTokenPass(r)
+		token, pass, err := loginero.ParamEx.ExtractTokenPass(r)
 		if err == nil {
-			sess, err = dsm.FetchBound(token, bid)
+			sess, err = loginero.SessMan.FetchBound(token, bid)
 			if err == nil && sess != nil {
-				updated, err = dum.UpdatePassword(sess.UID, pass)
+				updated, err = loginero.UserMan.UpdatePassword(sess.UID, pass)
 			}
 		}
 
 		if err == nil && sess != nil && updated {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			dsm.CreateSession(sid, sess.UID)
+			loginero.SessMan.CreateSession(sid, sess.UID)
 			//TODO for AJAX API version instead of redirect give HTTP 200 OK response
 			http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 		} else {
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				dsm.DeleteSession(sid)
+				loginero.SessMan.DeleteSession(sid)
 			}
 			//TODO for AJAX API version instead of redirect give HTTP 400 bad request response
 			http.Redirect(w, r, redirectFail, http.StatusSeeOther)
@@ -162,12 +182,16 @@ func ResetPasswordController(redirectSuccess string, redirectFail string) http.H
 }
 
 func PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
+	return defaultInstance.PageController(pageHandler)
+}
+
+func (loginero *Loginero) PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		var sess *Session
 		sid := getRequestSID(r)
 		if sid != "" {
-			sess, err = dsm.GetSession(sid)
+			sess, err = loginero.SessMan.GetSession(sid)
 			if err != nil {
 				wrapContext(pageHandler, nil, err)
 				return
@@ -185,12 +209,12 @@ func PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
 		bid := getRequestBID(r)
 		if bid == "" {
 			bid = generateID()
-			sess, err = dsm.CreateAnonSession(bid)
+			sess, err = loginero.SessMan.CreateAnonSession(bid)
 		} else {
-			sess, err = dsm.GetAnonSession(bid)
+			sess, err = loginero.SessMan.GetAnonSession(bid)
 			if err == nil && sess == nil {
 				bid = generateID()
-				sess, err = dsm.CreateAnonSession(bid)
+				sess, err = loginero.SessMan.CreateAnonSession(bid)
 			}
 		}
 		setBIDCookie(w, bid)
@@ -200,6 +224,10 @@ func PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
 }
 
 func LogoutController(redirectSuccess string) http.HandlerFunc {
+	return defaultInstance.LogoutController(redirectSuccess)
+}
+
+func (loginero *Loginero) LogoutController(redirectSuccess string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bid := getRequestBID(r)
 		if bid == "" {
@@ -209,7 +237,7 @@ func LogoutController(redirectSuccess string) http.HandlerFunc {
 		sid := getRequestSID(r)
 		if sid != "" {
 			deleteSIDCookie(w)
-			dsm.DeleteSession(sid)
+			loginero.SessMan.DeleteSession(sid)
 		}
 		http.Redirect(w, r, redirectSuccess, http.StatusSeeOther)
 	}

@@ -2,8 +2,6 @@ package loginero
 
 import ()
 
-var dum UserManager
-
 // UserManager does not introduce its own errors
 // The returned errors can be only from UserStore
 type UserManager interface {

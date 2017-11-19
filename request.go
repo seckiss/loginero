@@ -23,7 +23,6 @@ func generateID() string {
 
 var sidName = "LO_SID"
 var bidName = "LO_BID"
-var dpe ParamExtractor
 
 func getRequestBID(r *http.Request) string {
 	c, err := r.Cookie(bidName)

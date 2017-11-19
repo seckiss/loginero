@@ -12,17 +12,6 @@ var context = make(map[*http.Request]struct {
 })
 var contextMutex sync.RWMutex
 
-// default session manager
-var dsm SessionManager
-
-func SetSessionManager(sm SessionManager) {
-	dsm = sm
-}
-
-func BindToken(uid string) (token string, err error) {
-	return dsm.BindToken(uid)
-}
-
 func CurrentSession(r *http.Request) (*Session, error) {
 	contextMutex.RLock()
 	defer contextMutex.RUnlock()

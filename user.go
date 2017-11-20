@@ -2,6 +2,7 @@ package loginero
 
 import (
 	"errors"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"sync"
 )
@@ -11,8 +12,10 @@ import (
 type UserManager interface {
 	UserExists(uid string) (exists bool, err error)
 	UpdatePassword(uid string, pass string) (updated bool, err error)
-	CreateUser(user interface{}) (created bool, err error)
+	CreateUser(user interface{}, pass string) (created bool, err error)
 	CredsValid(uid string, pass string) (valid bool, err error)
+	PasswordPolicy(pass string) error
+	Hash(pass string) (hash string, err error)
 }
 
 type UserStore interface {
@@ -24,7 +27,7 @@ type UserStore interface {
 // type related to particular UserManager implementation
 type SimpleUser struct {
 	UID      string
-	Password string
+	Passhash string
 }
 
 type StandardUserManager struct {
@@ -43,22 +46,29 @@ func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated 
 	u, err := um.store.Get(uid)
 	if err == nil && u != nil {
 		user := u.(*SimpleUser)
-		user.Password = pass
-		updated = true
+		passhash, err := um.Hash(pass)
+		if err == nil {
+			user.Passhash = passhash
+			updated = true
+		}
 	}
 	return updated, err
 }
 
 // return true if user does not exist yet (by uid) and the new one was saved
-func (um *StandardUserManager) CreateUser(user interface{}) (created bool, err error) {
+func (um *StandardUserManager) CreateUser(user interface{}, pass string) (created bool, err error) {
 	uid := user.(*SimpleUser).UID
 	um.mutex.Lock()
 	defer um.mutex.Unlock()
 	exists, err := um.UserExists(uid)
 	if err == nil && !exists {
-		err = um.store.Set(uid, user)
+		hash, err := um.Hash(pass)
 		if err == nil {
-			created = true
+			user.(*SimpleUser).Passhash = hash
+			err = um.store.Set(uid, user)
+			if err == nil {
+				created = true
+			}
 		}
 	}
 	return created, err
@@ -69,15 +79,36 @@ func (um *StandardUserManager) CredsValid(uid string, pass string) (valid bool, 
 	u, err := um.store.Get(uid)
 	if err == nil && u != nil {
 		user := u.(*SimpleUser)
-		if user.Password == pass {
-			valid = true
+		hash, err := um.Hash(pass)
+		if err == nil {
+			if user.Passhash == hash {
+				valid = true
+			}
 		}
 	}
 	return valid, err
 }
 
+func (um *StandardUserManager) PasswordPolicy(pass string) error {
+	if len(pass) < 6 {
+		return errors.New("Password must have at least 6 characters")
+	}
+	return nil
+}
+
+func (um *StandardUserManager) Hash(pass string) (hash string, err error) {
+	err = um.PasswordPolicy(pass)
+	if err == nil {
+		bhash, err := bcrypt.GenerateFromPassword([]byte(pass), -1)
+		if err == nil {
+			hash = string(bhash)
+		}
+	}
+	return hash, err
+}
+
 type UserExtractor interface {
-	ExtractNewUser(r *http.Request) (uid string, user interface{}, err error)
+	ExtractNewUser(r *http.Request) (uid string, pass string, user interface{}, err error)
 	ExtractLogin(r *http.Request) (uid string, pass string, err error)
 	ExtractTokenPass(r *http.Request) (token string, pass string, err error)
 }
@@ -85,14 +116,14 @@ type UserExtractor interface {
 type StandardUserExtractor struct {
 }
 
-func (pe *StandardUserExtractor) ExtractNewUser(r *http.Request) (uid string, user interface{}, err error) {
+func (pe *StandardUserExtractor) ExtractNewUser(r *http.Request) (uid string, pass string, user interface{}, err error) {
 	username := r.FormValue("username")
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")
 	if username != "" && pass1 != "" && pass1 == pass2 {
-		return username, &SimpleUser{UID: username, Password: pass1}, nil
+		return username, pass1, &SimpleUser{UID: username}, nil
 	}
-	return "", nil, errors.New("Wrong POST params")
+	return "", "", nil, errors.New("Wrong POST params")
 }
 
 func (pe *StandardUserExtractor) ExtractLogin(r *http.Request) (uid string, pass string, err error) {

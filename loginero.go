@@ -115,12 +115,12 @@ func CreateAccountController(createAccountHandler http.HandlerFunc) http.Handler
 
 func (loginero *Loginero) CreateAccountController(createAccountHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid, user, err := loginero.Extractor.ExtractNewUser(r)
+		uid, pass, user, err := loginero.Extractor.ExtractNewUser(r)
 		if err != nil {
 			loginero.wrapContext(createAccountHandler, &Context{nil, err})(w, r)
 			return
 		}
-		created, err := loginero.UserMan.CreateUser(user)
+		created, err := loginero.UserMan.CreateUser(user, pass)
 		if err != nil {
 			loginero.wrapContext(createAccountHandler, &Context{nil, err})(w, r)
 			return

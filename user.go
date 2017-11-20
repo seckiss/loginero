@@ -17,10 +17,6 @@ type UserStore interface {
 	Delete(uid string) error
 }
 
-func NewRamUserStore() UserStore {
-	return NewRamStore()
-}
-
 // type related to particular UserManager implementation
 type SimpleUser struct {
 	UID      string

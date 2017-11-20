@@ -28,7 +28,7 @@ func init() {
 	mrand.Seed(seed.Int64())
 
 	sessionStore := NewRamSessionStore()
-	userStore := NewRamUserStore()
+	userStore := NewRamStore()
 	ssm := &StandardSessionManager{
 		store: sessionStore,
 	}

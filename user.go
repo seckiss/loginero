@@ -3,6 +3,7 @@ package loginero
 import (
 	"errors"
 	"net/http"
+	"sync"
 )
 
 // UserManager does not introduce its own errors
@@ -28,6 +29,7 @@ type SimpleUser struct {
 
 type StandardUserManager struct {
 	store UserStore
+	mutex *sync.Mutex
 }
 
 func (um *StandardUserManager) UserExists(uid string) (exists bool, err error) {
@@ -50,8 +52,8 @@ func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated 
 // return true if user does not exist yet (by uid) and the new one was saved
 func (um *StandardUserManager) CreateUser(user interface{}) (created bool, err error) {
 	uid := user.(*SimpleUser).UID
-	//TODO sync
-
+	um.mutex.Lock()
+	defer um.mutex.Unlock()
 	exists, err := um.UserExists(uid)
 	if err == nil && !exists {
 		err = um.store.Set(uid, user)

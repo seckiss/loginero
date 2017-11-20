@@ -64,6 +64,7 @@ func (um *StandardUserManager) CreateUser(user interface{}) (created bool, err e
 	return created, err
 }
 
+// return true if user exists and password matches
 func (um *StandardUserManager) CredsValid(uid string, pass string) (valid bool, err error) {
 	u, err := um.store.Get(uid)
 	if err == nil && u != nil {
@@ -75,16 +76,16 @@ func (um *StandardUserManager) CredsValid(uid string, pass string) (valid bool, 
 	return valid, err
 }
 
-type ParamExtractor interface {
+type UserExtractor interface {
 	ExtractNewUser(r *http.Request) (uid string, user interface{}, err error)
 	ExtractLogin(r *http.Request) (uid string, pass string, err error)
 	ExtractTokenPass(r *http.Request) (token string, pass string, err error)
 }
 
-type StandardParamExtractor struct {
+type StandardUserExtractor struct {
 }
 
-func (pe *StandardParamExtractor) ExtractNewUser(r *http.Request) (uid string, user interface{}, err error) {
+func (pe *StandardUserExtractor) ExtractNewUser(r *http.Request) (uid string, user interface{}, err error) {
 	username := r.FormValue("username")
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")
@@ -94,7 +95,7 @@ func (pe *StandardParamExtractor) ExtractNewUser(r *http.Request) (uid string, u
 	return "", nil, errors.New("Wrong POST params")
 }
 
-func (pe *StandardParamExtractor) ExtractLogin(r *http.Request) (uid string, pass string, err error) {
+func (pe *StandardUserExtractor) ExtractLogin(r *http.Request) (uid string, pass string, err error) {
 	username := r.FormValue("username")
 	pass1 := r.FormValue("pass1")
 	if username != "" && pass1 != "" {
@@ -104,7 +105,7 @@ func (pe *StandardParamExtractor) ExtractLogin(r *http.Request) (uid string, pas
 
 }
 
-func (pe *StandardParamExtractor) ExtractTokenPass(r *http.Request) (token string, pass string, err error) {
+func (pe *StandardUserExtractor) ExtractTokenPass(r *http.Request) (token string, pass string, err error) {
 	token = r.FormValue("token")
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")

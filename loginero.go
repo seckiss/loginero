@@ -36,18 +36,18 @@ func init() {
 	sum := &StandardUserManager{
 		store: userStore,
 	}
-	spe := &StandardParamExtractor{}
+	extractor := &StandardUserExtractor{}
 	defaultInstance = &Loginero{
-		SessMan: ssm,
-		UserMan: sum,
-		ParamEx: spe,
+		SessMan:   ssm,
+		UserMan:   sum,
+		Extractor: extractor,
 	}
 }
 
 type Loginero struct {
 	SessMan      SessionManager
 	UserMan      UserManager
-	ParamEx      ParamExtractor
+	Extractor    UserExtractor
 	context      map[*http.Request]*Context
 	contextMutex *sync.RWMutex
 }
@@ -77,7 +77,7 @@ func LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
 
 func (loginero *Loginero) LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid, pass, err := loginero.ParamEx.ExtractLogin(r)
+		uid, pass, err := loginero.Extractor.ExtractLogin(r)
 		if err != nil {
 			loginero.wrapContext(loginHandler, nil, err)
 			return
@@ -114,7 +114,7 @@ func CreateAccountController(createAccountHandler http.HandlerFunc) http.Handler
 
 func (loginero *Loginero) CreateAccountController(createAccountHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid, user, err := loginero.ParamEx.ExtractNewUser(r)
+		uid, user, err := loginero.Extractor.ExtractNewUser(r)
 		if err != nil {
 			loginero.wrapContext(createAccountHandler, nil, err)
 			return
@@ -150,7 +150,7 @@ func ResetPasswordController(resetHandler http.HandlerFunc) http.HandlerFunc {
 
 func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token, pass, err := loginero.ParamEx.ExtractTokenPass(r)
+		token, pass, err := loginero.Extractor.ExtractTokenPass(r)
 		if err != nil {
 			loginero.wrapContext(resetHandler, nil, err)
 			return

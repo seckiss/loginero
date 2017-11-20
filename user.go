@@ -2,6 +2,7 @@ package loginero
 
 import (
 	"errors"
+	"fmt"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"sync"
@@ -16,6 +17,7 @@ type UserManager interface {
 	CredsValid(uid string, pass string) (valid bool, err error)
 	PasswordPolicy(pass string) error
 	Hash(pass string) (hash string, err error)
+	HashValid(hash string, pass string) (valid bool)
 }
 
 type UserStore interface {
@@ -79,12 +81,8 @@ func (um *StandardUserManager) CredsValid(uid string, pass string) (valid bool, 
 	u, err := um.store.Get(uid)
 	if err == nil && u != nil {
 		user := u.(*SimpleUser)
-		hash, err := um.Hash(pass)
-		if err == nil {
-			if user.Passhash == hash {
-				valid = true
-			}
-		}
+		valid = um.HashValid(user.Passhash, pass)
+		_ = fmt.Printf
 	}
 	return valid, err
 }
@@ -105,6 +103,17 @@ func (um *StandardUserManager) Hash(pass string) (hash string, err error) {
 		}
 	}
 	return hash, err
+}
+
+func (um *StandardUserManager) HashValid(hash string, pass string) (valid bool) {
+	err := um.PasswordPolicy(pass)
+	if err == nil {
+		err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(pass))
+		if err == nil {
+			valid = true
+		}
+	}
+	return valid
 }
 
 type UserExtractor interface {

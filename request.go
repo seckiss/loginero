@@ -1,7 +1,6 @@
 package loginero
 
 import (
-	"errors"
 	mrand "math/rand"
 	"net/http"
 	"regexp"
@@ -62,43 +61,4 @@ func deleteBIDCookie(w http.ResponseWriter) {
 func deleteSIDCookie(w http.ResponseWriter) {
 	//TODO cookie should be cloned from options' SID cookie template
 	http.SetCookie(w, &http.Cookie{Name: sidName, Value: "", MaxAge: -1, Path: "/"})
-}
-
-type ParamExtractor interface {
-	ExtractNewUser(r *http.Request) (uid string, user interface{}, err error)
-	ExtractLogin(r *http.Request) (uid string, pass string, err error)
-	ExtractTokenPass(r *http.Request) (token string, pass string, err error)
-}
-
-type StandardParamExtractor struct {
-}
-
-func (pe *StandardParamExtractor) ExtractNewUser(r *http.Request) (uid string, user interface{}, err error) {
-	username := r.FormValue("username")
-	pass1 := r.FormValue("pass1")
-	pass2 := r.FormValue("pass2")
-	if username != "" && pass1 != "" && pass1 == pass2 {
-		return username, &SimpleUser{UID: username, Password: pass1}, nil
-	}
-	return "", nil, errors.New("Wrong POST params")
-}
-
-func (pe *StandardParamExtractor) ExtractLogin(r *http.Request) (uid string, pass string, err error) {
-	username := r.FormValue("username")
-	pass1 := r.FormValue("pass1")
-	if username != "" && pass1 != "" {
-		return username, pass1, nil
-	}
-	return "", "", errors.New("Wrong POST params")
-
-}
-
-func (pe *StandardParamExtractor) ExtractTokenPass(r *http.Request) (token string, pass string, err error) {
-	token = r.FormValue("token")
-	pass1 := r.FormValue("pass1")
-	pass2 := r.FormValue("pass2")
-	if token != "" && pass1 != "" && pass1 == pass2 {
-		return token, pass1, nil
-	}
-	return "", "", errors.New("Wrong POST params")
 }

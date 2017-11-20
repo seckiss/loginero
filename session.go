@@ -2,38 +2,31 @@ package loginero
 
 import (
 	"net/http"
-	"sync"
 	"time"
 )
 
-var context = make(map[*http.Request]struct {
-	sess *Session
-	err  error
-})
-var contextMutex sync.RWMutex
-
 func CurrentSession(r *http.Request) (*Session, error) {
-	contextMutex.RLock()
-	defer contextMutex.RUnlock()
-	ctx := context[r]
+	return defaultInstance.CurrentSession(r)
+}
+
+func (loginero *Loginero) CurrentSession(r *http.Request) (*Session, error) {
+	loginero.contextMutex.RLock()
+	defer loginero.contextMutex.RUnlock()
+	ctx := loginero.context[r]
 	return ctx.sess, ctx.err
 }
 
-func wrapContext(h http.HandlerFunc, sess *Session, err error) http.HandlerFunc {
+func (loginero *Loginero) wrapContext(h http.HandlerFunc, sess *Session, err error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		contextMutex.Lock()
-		context[r] = struct {
-			sess *Session
-			err  error
-		}{sess, err}
-		contextMutex.Unlock()
+		loginero.contextMutex.Lock()
+		loginero.context[r] = &Context{sess, err}
+		loginero.contextMutex.Unlock()
 
 		h(w, r)
 
-		contextMutex.Lock()
-		delete(context, r)
-		contextMutex.Unlock()
+		loginero.contextMutex.Lock()
+		delete(loginero.context, r)
+		loginero.contextMutex.Unlock()
 
 	}
 }

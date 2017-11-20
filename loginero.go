@@ -7,6 +7,7 @@ import (
 	mrand "math/rand"
 	"net/http"
 	"sync"
+	"time"
 )
 
 //TODO:
@@ -59,6 +60,7 @@ type Context struct {
 }
 
 var defaultInstance *Loginero
+var tokenExpireTime = 30 * time.Minute
 
 func SetOptions() {
 	//TODO set BID and SID cookie template (Path, Secure, HttpOnly, MaxAge, etc)
@@ -161,7 +163,7 @@ func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc)
 			loginero.wrapContext(resetHandler, &Context{nil, err})(w, r)
 			return
 		}
-		if sess != nil {
+		if sess != nil && time.Now().Sub(sess.Created) < tokenExpireTime {
 			updated, err := loginero.UserMan.UpdatePassword(sess.UID, pass)
 			if err != nil {
 				loginero.wrapContext(resetHandler, &Context{nil, err})(w, r)

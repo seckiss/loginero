@@ -102,7 +102,10 @@ func handlerFromHtml(html string) http.HandlerFunc {
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
-	sess, _ := loginero.CurrentSession(r)
+	sess, err := loginero.CurrentSession(r)
+	if err != nil {
+		panic(err)
+	}
 	if sess.Anon {
 		// unlogged
 		http.Redirect(w, r, "/loginform?failed=1", http.StatusSeeOther)

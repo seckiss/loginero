@@ -16,10 +16,10 @@ func (loginero *Loginero) CurrentSession(r *http.Request) (*Session, error) {
 	return ctx.sess, ctx.err
 }
 
-func (loginero *Loginero) wrapContext(h http.HandlerFunc, sess *Session, err error) http.HandlerFunc {
+func (loginero *Loginero) wrapContext(h http.HandlerFunc, ctx *Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		loginero.contextMutex.Lock()
-		loginero.context[r] = &Context{sess, err}
+		loginero.context[r] = ctx
 		loginero.contextMutex.Unlock()
 
 		h(w, r)

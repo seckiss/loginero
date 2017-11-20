@@ -29,7 +29,7 @@ type SimpleUser struct {
 
 type StandardUserManager struct {
 	store UserStore
-	mutex *sync.Mutex
+	mutex sync.Mutex
 }
 
 func (um *StandardUserManager) UserExists(uid string) (exists bool, err error) {

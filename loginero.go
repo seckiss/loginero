@@ -41,6 +41,7 @@ func init() {
 		SessMan:   ssm,
 		UserMan:   sum,
 		Extractor: extractor,
+		context:   make(map[*http.Request]*Context),
 	}
 }
 
@@ -49,7 +50,7 @@ type Loginero struct {
 	UserMan      UserManager
 	Extractor    UserExtractor
 	context      map[*http.Request]*Context
-	contextMutex *sync.RWMutex
+	contextMutex sync.RWMutex
 }
 
 type Context struct {
@@ -79,12 +80,12 @@ func (loginero *Loginero) LoginController(loginHandler http.HandlerFunc) http.Ha
 	return func(w http.ResponseWriter, r *http.Request) {
 		uid, pass, err := loginero.Extractor.ExtractLogin(r)
 		if err != nil {
-			loginero.wrapContext(loginHandler, nil, err)
+			loginero.wrapContext(loginHandler, &Context{nil, err})(w, r)
 			return
 		}
 		valid, err := loginero.UserMan.CredsValid(uid, pass)
 		if err != nil {
-			loginero.wrapContext(loginHandler, nil, err)
+			loginero.wrapContext(loginHandler, &Context{nil, err})(w, r)
 			return
 		}
 
@@ -92,7 +93,7 @@ func (loginero *Loginero) LoginController(loginHandler http.HandlerFunc) http.Ha
 			sid := generateID()
 			setSIDCookie(w, sid)
 			sess, err := loginero.SessMan.CreateSession(sid, uid)
-			loginero.wrapContext(loginHandler, sess, err)
+			loginero.wrapContext(loginHandler, &Context{sess, err})(w, r)
 			return
 		} else {
 			sid := getRequestSID(r)
@@ -102,7 +103,7 @@ func (loginero *Loginero) LoginController(loginHandler http.HandlerFunc) http.Ha
 			}
 			bid, sess, err := loginero.browserSessionFallback(r)
 			setBIDCookie(w, bid)
-			loginero.wrapContext(loginHandler, sess, err)
+			loginero.wrapContext(loginHandler, &Context{sess, err})(w, r)
 			return
 		}
 	}
@@ -116,19 +117,19 @@ func (loginero *Loginero) CreateAccountController(createAccountHandler http.Hand
 	return func(w http.ResponseWriter, r *http.Request) {
 		uid, user, err := loginero.Extractor.ExtractNewUser(r)
 		if err != nil {
-			loginero.wrapContext(createAccountHandler, nil, err)
+			loginero.wrapContext(createAccountHandler, &Context{nil, err})(w, r)
 			return
 		}
 		created, err := loginero.UserMan.CreateUser(user)
 		if err != nil {
-			loginero.wrapContext(createAccountHandler, nil, err)
+			loginero.wrapContext(createAccountHandler, &Context{nil, err})(w, r)
 			return
 		}
 		if created {
 			sid := generateID()
 			setSIDCookie(w, sid)
 			sess, err := loginero.SessMan.CreateSession(sid, uid)
-			loginero.wrapContext(createAccountHandler, sess, err)
+			loginero.wrapContext(createAccountHandler, &Context{sess, err})(w, r)
 			return
 		} else {
 			sid := getRequestSID(r)
@@ -138,7 +139,7 @@ func (loginero *Loginero) CreateAccountController(createAccountHandler http.Hand
 			}
 			bid, sess, err := loginero.browserSessionFallback(r)
 			setBIDCookie(w, bid)
-			loginero.wrapContext(createAccountHandler, sess, err)
+			loginero.wrapContext(createAccountHandler, &Context{sess, err})(w, r)
 			return
 		}
 	}
@@ -152,25 +153,25 @@ func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc)
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, pass, err := loginero.Extractor.ExtractTokenPass(r)
 		if err != nil {
-			loginero.wrapContext(resetHandler, nil, err)
+			loginero.wrapContext(resetHandler, &Context{nil, err})(w, r)
 			return
 		}
 		sess, err := loginero.SessMan.FetchBound(token)
 		if err != nil {
-			loginero.wrapContext(resetHandler, nil, err)
+			loginero.wrapContext(resetHandler, &Context{nil, err})(w, r)
 			return
 		}
 		if sess != nil {
 			updated, err := loginero.UserMan.UpdatePassword(sess.UID, pass)
 			if err != nil {
-				loginero.wrapContext(resetHandler, nil, err)
+				loginero.wrapContext(resetHandler, &Context{nil, err})(w, r)
 				return
 			}
 			if updated {
 				sid := generateID()
 				setSIDCookie(w, sid)
 				sess, err := loginero.SessMan.CreateSession(sid, sess.UID)
-				loginero.wrapContext(resetHandler, sess, err)
+				loginero.wrapContext(resetHandler, &Context{sess, err})(w, r)
 				return
 			}
 		}
@@ -182,7 +183,7 @@ func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc)
 		}
 		bid, sess, err := loginero.browserSessionFallback(r)
 		setBIDCookie(w, bid)
-		loginero.wrapContext(resetHandler, sess, err)
+		loginero.wrapContext(resetHandler, &Context{sess, err})(w, r)
 		return
 	}
 }
@@ -197,12 +198,12 @@ func (loginero *Loginero) PageController(pageHandler http.HandlerFunc) http.Hand
 		if sid != "" {
 			sess, err := loginero.SessMan.GetSession(sid)
 			if err != nil {
-				loginero.wrapContext(pageHandler, nil, err)
+				loginero.wrapContext(pageHandler, &Context{nil, err})(w, r)
 				return
 			}
 			if sess != nil {
 				setSIDCookie(w, sid)
-				loginero.wrapContext(pageHandler, sess, nil)
+				loginero.wrapContext(pageHandler, &Context{sess, nil})(w, r)
 				return
 			} else {
 				deleteSIDCookie(w)
@@ -210,7 +211,7 @@ func (loginero *Loginero) PageController(pageHandler http.HandlerFunc) http.Hand
 		}
 		bid, sess, err := loginero.browserSessionFallback(r)
 		setBIDCookie(w, bid)
-		loginero.wrapContext(pageHandler, sess, err)
+		loginero.wrapContext(pageHandler, &Context{sess, err})(w, r)
 		return
 	}
 }
@@ -228,7 +229,7 @@ func (loginero *Loginero) LogoutController(logoutHandler http.HandlerFunc) http.
 		}
 		bid, sess, err := loginero.browserSessionFallback(r)
 		setBIDCookie(w, bid)
-		loginero.wrapContext(logoutHandler, sess, err)
+		loginero.wrapContext(logoutHandler, &Context{sess, err})(w, r)
 		return
 	}
 }

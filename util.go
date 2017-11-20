@@ -13,13 +13,12 @@ type KeyValueStore interface {
 // Universal API key-value store
 type RamStore struct {
 	Map      map[string]interface{}
-	MapMutex *sync.RWMutex
+	MapMutex sync.RWMutex
 }
 
 func NewRamStore() *RamStore {
 	return &RamStore{
-		Map:      make(map[string]interface{}),
-		MapMutex: new(sync.RWMutex),
+		Map: make(map[string]interface{}),
 	}
 }
 

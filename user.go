@@ -48,9 +48,9 @@ func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated 
 	u, err := um.store.Get(uid)
 	if err == nil && u != nil {
 		user := u.(*SimpleUser)
-		passhash, err := um.Hash(pass)
+		hash, err := um.Hash(pass)
 		if err == nil {
-			user.Passhash = passhash
+			user.Passhash = hash
 			updated = true
 		}
 	}

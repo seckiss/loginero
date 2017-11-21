@@ -39,8 +39,8 @@ type Session struct {
 }
 
 type SessionStore interface {
-	Get(k string) (*Session, error)
-	Set(k string, sess *Session) error
+	Get(k string) ([]*Session, error)
+	Set(k string, sess []*Session) error
 	Delete(k string) error
 }
 
@@ -54,16 +54,16 @@ func NewRamSessionStore() SessionStore {
 	}
 }
 
-func (ss *RamSessionStore) Get(k string) (*Session, error) {
+func (ss *RamSessionStore) Get(k string) ([]*Session, error) {
 	sess, err := ss.KVStore.Get(k)
 	if sess == nil {
 		return nil, err
 	} else {
-		return sess.(*Session), err
+		return sess.([]*Session), err
 	}
 }
 
-func (ss *RamSessionStore) Set(k string, sess *Session) error {
+func (ss *RamSessionStore) Set(k string, sess []*Session) error {
 	return ss.KVStore.Set(k, sess)
 }
 
@@ -79,6 +79,7 @@ type SessionManager interface {
 	CreateSession(sid string, uid string) (*Session, error)
 	CreateAnonSession(bid string) (*Session, error)
 	DeleteSession(sid string) error
+	GetSessionsForUser(uid string) (sessionids []string, err error)
 }
 
 type StandardSessionManager struct {
@@ -94,13 +95,13 @@ func (sm StandardSessionManager) BindToken(uid string) (token string, err error)
 		Created: time.Now(),
 		Anon:    false,
 	}
-	err = sm.store.Set(k, &sess)
+	err = sm.store.Set(k, []*Session{&sess})
 	return token, err
 }
 
 func (sm StandardSessionManager) FetchBound(token string) (*Session, error) {
 	k := "tid:" + token
-	sess, err := sm.store.Get(k)
+	sessions, err := sm.store.Get(k)
 	if err != nil {
 		return nil, err
 	}
@@ -108,29 +109,32 @@ func (sm StandardSessionManager) FetchBound(token string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sess, nil
+	if len(sessions) > 0 {
+		return sessions[0], nil
+	}
+	return nil, nil
 }
 
 func (sm StandardSessionManager) GetSession(sid string) (*Session, error) {
 	k := "sid:" + sid
-	sess, err := sm.store.Get(k)
+	sessions, err := sm.store.Get(k)
 	if err != nil {
 		return nil, err
 	}
-	if sess != nil {
-		return sess, nil
+	if len(sessions) > 0 {
+		return sessions[0], nil
 	}
 	return nil, nil
 }
 
 func (sm StandardSessionManager) GetAnonSession(bid string) (*Session, error) {
 	k := "bid:" + bid
-	sess, err := sm.store.Get(k)
+	sessions, err := sm.store.Get(k)
 	if err != nil {
 		return nil, err
 	}
-	if sess != nil {
-		return sess, nil
+	if len(sessions) > 0 {
+		return sessions[0], nil
 	}
 	return nil, nil
 }
@@ -143,7 +147,11 @@ func (sm StandardSessionManager) CreateSession(sid string, uid string) (*Session
 		Created: time.Now(),
 		Anon:    false,
 	}
-	return &sess, sm.store.Set(k, &sess)
+	err := sm.store.Set(k, []*Session{&sess})
+	if err != nil {
+		return nil, err
+	}
+	return &sess, nil
 }
 
 func (sm StandardSessionManager) CreateAnonSession(bid string) (*Session, error) {
@@ -155,7 +163,7 @@ func (sm StandardSessionManager) CreateAnonSession(bid string) (*Session, error)
 		Created: time.Now(),
 		Anon:    true,
 	}
-	err := sm.store.Set(k, &anonSess)
+	err := sm.store.Set(k, []*Session{&anonSess})
 	if err != nil {
 		return nil, err
 	}
@@ -166,4 +174,9 @@ func (sm StandardSessionManager) DeleteSession(sid string) error {
 	k := "sid:" + sid
 	err := sm.store.Delete(k)
 	return err
+}
+
+func (sm StandardSessionManager) GetSessionsForUser(uid string) (sessionids []string, err error) {
+	//TODO
+	return nil, nil
 }

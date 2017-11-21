@@ -17,18 +17,21 @@ func init() {
 	}
 	mrand.Seed(seed.Int64())
 
-	sessionStore := NewRamSessionStore()
+	// we use 3 simplest RAM Key-Value stores here
+	// but in production it may be a different storage base
+	// since theses stores have different requirements
+	sessionStore := NewRamStore()
 	userStore := NewRamStore()
 	deviceStore := NewRamStore()
 	ssm := &StandardSessionManager{
-		store: sessionStore,
+		Store: sessionStore,
 	}
 	sum := &StandardUserManager{
-		store: userStore,
+		Store: userStore,
 	}
 	extractor := &StandardUserExtractor{}
 	sdm := &StandardDeviceManager{
-		store: deviceStore,
+		Store: deviceStore,
 	}
 	DefaultInstance = &Loginero{
 		SessMan:   ssm,

@@ -9,12 +9,12 @@ type DeviceManager interface {
 }
 
 type StandardDeviceManager struct {
-	store KeyValueStore
+	Store KeyValueStore
 }
 
 func (dm *StandardDeviceManager) GetDeviceForSession(sid string) (device interface{}, err error) {
-	return dm.store.Get(sid)
+	return dm.Store.Get(sid)
 }
 func (dm *StandardDeviceManager) SetDeviceForSession(sid string, device interface{}) error {
-	return dm.store.Set(sid, device)
+	return dm.Store.Set(sid, device)
 }

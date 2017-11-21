@@ -20,12 +20,6 @@ type UserManager interface {
 	HashValid(hash string, pass string) (valid bool)
 }
 
-type UserStore interface {
-	Get(uid string) (user interface{}, err error)
-	Set(uid string, user interface{}) error
-	Delete(uid string) error
-}
-
 // type related to particular UserManager implementation
 type SimpleUser struct {
 	UID      string
@@ -33,19 +27,19 @@ type SimpleUser struct {
 }
 
 type StandardUserManager struct {
-	store UserStore
+	Store KeyValueStore
 	mutex sync.Mutex
 }
 
 func (um *StandardUserManager) UserExists(uid string) (exists bool, err error) {
-	u, err := um.store.Get(uid)
+	u, err := um.Store.Get(uid)
 	exists = (u != nil)
 	return exists, err
 }
 
 // return true if user was found and password was updated
 func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated bool, err error) {
-	u, err := um.store.Get(uid)
+	u, err := um.Store.Get(uid)
 	if err == nil && u != nil {
 		user := u.(*SimpleUser)
 		hash, err := um.Hash(pass)
@@ -67,7 +61,7 @@ func (um *StandardUserManager) CreateUser(user interface{}, pass string) (create
 		hash, err := um.Hash(pass)
 		if err == nil {
 			user.(*SimpleUser).Passhash = hash
-			err = um.store.Set(uid, user)
+			err = um.Store.Set(uid, user)
 			if err == nil {
 				created = true
 			}
@@ -78,7 +72,7 @@ func (um *StandardUserManager) CreateUser(user interface{}, pass string) (create
 
 // return true if user exists and password matches
 func (um *StandardUserManager) CredsValid(uid string, pass string) (valid bool, err error) {
-	u, err := um.store.Get(uid)
+	u, err := um.Store.Get(uid)
 	if err == nil && u != nil {
 		user := u.(*SimpleUser)
 		valid = um.HashValid(user.Passhash, pass)

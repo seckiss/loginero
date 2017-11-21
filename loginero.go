@@ -19,6 +19,7 @@ func init() {
 
 	sessionStore := NewRamSessionStore()
 	userStore := NewRamStore()
+	deviceStore := NewRamStore()
 	ssm := &StandardSessionManager{
 		store: sessionStore,
 	}
@@ -26,10 +27,14 @@ func init() {
 		store: userStore,
 	}
 	extractor := &StandardUserExtractor{}
+	sdm := &StandardDeviceManager{
+		store: deviceStore,
+	}
 	DefaultInstance = &Loginero{
 		SessMan:   ssm,
 		UserMan:   sum,
 		Extractor: extractor,
+		DeviceMan: sdm,
 		context:   make(map[*http.Request]*Context),
 	}
 }
@@ -38,6 +43,7 @@ type Loginero struct {
 	SessMan      SessionManager
 	UserMan      UserManager
 	Extractor    UserExtractor
+	DeviceMan    DeviceManager
 	context      map[*http.Request]*Context
 	contextMutex sync.RWMutex
 }

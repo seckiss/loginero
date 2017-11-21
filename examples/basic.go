@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
+	"html"
 	"log"
 	"loginero"
 	"net/http"
@@ -144,17 +146,19 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 
 func pageHandler(w http.ResponseWriter, r *http.Request) {
 	sess, err := loginero.CurrentSession(r)
+	sessions, err := loginero.DefaultInstance.SessMan.UserGetSessions(sess.UID)
 	_ = err
-	handlerFromHtml("Current user: "+sess.UID)(w, r)
+
+	s := spew.Sdump(sessions)
+	handlerFromHtml("Current user: "+sess.UID+"<br/>"+html.EscapeString(s))(w, r)
 }
 
 func passtokenHandler(w http.ResponseWriter, r *http.Request) {
 	uid := r.FormValue("username")
-	token, err := loginero.BindToken(uid)
-	// think over error reporting and semantics
-	if err != nil || token == "" {
-		handlerFromHtml("User not found")(w, r)
-	} else {
+	token, _ := loginero.UserToken(uid)
+	if token != "" {
 		handlerFromHtml("In backend send token url to the user: http://127.0.0.1:8085/resetform?token="+token)(w, r)
+	} else {
+		handlerFromHtml("User not found")(w, r)
 	}
 }

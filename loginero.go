@@ -26,7 +26,7 @@ func init() {
 		store: userStore,
 	}
 	extractor := &StandardUserExtractor{}
-	defaultInstance = &Loginero{
+	DefaultInstance = &Loginero{
 		SessMan:   ssm,
 		UserMan:   sum,
 		Extractor: extractor,
@@ -47,19 +47,27 @@ type Context struct {
 	err  error
 }
 
-var defaultInstance *Loginero
+var DefaultInstance *Loginero
 var tokenExpireTime = 30 * time.Minute
 
-func BindToken(uid string) (token string, err error) {
-	return defaultInstance.SessMan.BindToken(uid)
+func CurrentSession(r *http.Request) (*Session, error) {
+	return DefaultInstance.CurrentSession(r)
 }
 
-func (loginero *Loginero) BindToken(uid string) (token string, err error) {
-	return loginero.SessMan.BindToken(uid)
+func UserToken(uid string) (token string, err error) {
+	return DefaultInstance.UserToken(uid)
+}
+
+func (loginero *Loginero) UserToken(uid string) (token string, err error) {
+	exists, err := loginero.UserMan.UserExists(uid)
+	if err == nil && exists {
+		token, err = loginero.SessMan.BindToken(uid)
+	}
+	return token, err
 }
 
 func LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
-	return defaultInstance.LoginController(loginHandler)
+	return DefaultInstance.LoginController(loginHandler)
 }
 
 func (loginero *Loginero) LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
@@ -96,7 +104,7 @@ func (loginero *Loginero) LoginController(loginHandler http.HandlerFunc) http.Ha
 }
 
 func CreateAccountController(createAccountHandler http.HandlerFunc) http.HandlerFunc {
-	return defaultInstance.CreateAccountController(createAccountHandler)
+	return DefaultInstance.CreateAccountController(createAccountHandler)
 }
 
 func (loginero *Loginero) CreateAccountController(createAccountHandler http.HandlerFunc) http.HandlerFunc {
@@ -132,7 +140,7 @@ func (loginero *Loginero) CreateAccountController(createAccountHandler http.Hand
 }
 
 func ResetPasswordController(resetHandler http.HandlerFunc) http.HandlerFunc {
-	return defaultInstance.ResetPasswordController(resetHandler)
+	return DefaultInstance.ResetPasswordController(resetHandler)
 }
 
 func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc) http.HandlerFunc {
@@ -176,7 +184,7 @@ func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc)
 }
 
 func PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
-	return defaultInstance.PageController(pageHandler)
+	return DefaultInstance.PageController(pageHandler)
 }
 
 func (loginero *Loginero) PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
@@ -204,7 +212,7 @@ func (loginero *Loginero) PageController(pageHandler http.HandlerFunc) http.Hand
 }
 
 func LogoutController(logoutHandler http.HandlerFunc) http.HandlerFunc {
-	return defaultInstance.LogoutController(logoutHandler)
+	return DefaultInstance.LogoutController(logoutHandler)
 }
 
 func (loginero *Loginero) LogoutController(logoutHandler http.HandlerFunc) http.HandlerFunc {

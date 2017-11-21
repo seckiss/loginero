@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-func CurrentSession(r *http.Request) (*Session, error) {
-	return defaultInstance.CurrentSession(r)
-}
-
 func (loginero *Loginero) CurrentSession(r *http.Request) (*Session, error) {
 	loginero.contextMutex.RLock()
 	defer loginero.contextMutex.RUnlock()

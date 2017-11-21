@@ -10,18 +10,6 @@ import (
 	"time"
 )
 
-//TODO:
-// There are a few missing features:
-// 1) Terminate all sessions of the user
-// 2) Remove stale records in Sid2User after password reset (related to no 1)
-// 3) reporting errors from UserStore - need API change
-// 4) use different UserStore than default
-
-// To solve the above need to change API and implementation:
-// - UserStore API to return errors
-// - Configuration options: passing UserStore
-// - the only external interface/API should be a key-value store
-
 func init() {
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
@@ -61,10 +49,6 @@ type Context struct {
 
 var defaultInstance *Loginero
 var tokenExpireTime = 30 * time.Minute
-
-func SetOptions() {
-	//TODO set BID and SID cookie template (Path, Secure, HttpOnly, MaxAge, etc)
-}
 
 func BindToken(uid string) (token string, err error) {
 	return defaultInstance.SessMan.BindToken(uid)
@@ -170,6 +154,7 @@ func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc)
 				return
 			}
 			if updated {
+				// TODO should we deactivate all other sessions related to uid?
 				sid := generateID()
 				setSIDCookie(w, sid)
 				sess, err := loginero.SessMan.CreateSession(sid, sess.UID)

@@ -11,6 +11,18 @@ import (
 
 func main() {
 
+	sdm := &loginero.StandardDeviceManager{
+		store: nil,
+	}
+	/*
+		instance = &loginero.Loginero{
+			SessMan:   ssm,
+			UserMan:   sum,
+			Extractor: extractor,
+			DeviceMan: sdm,
+			context:   make(map[*http.Request]*Context),
+		}
+	*/
 	/////////////////////////////////////////////////////////////////////////////
 	// expected POST requests
 	/////////////////////////////////////////////////////////////////////////////

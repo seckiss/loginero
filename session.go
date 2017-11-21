@@ -73,7 +73,7 @@ func (sm StandardSessionManager) BindToken(uid string) (token string, err error)
 		Created: time.Now(),
 		Anon:    false,
 	}
-	err = sm.Store.Set(k, []*Session{sess})
+	err = sm.Store.Put(k, []*Session{sess})
 	return token, err
 }
 
@@ -137,7 +137,7 @@ func (sm StandardSessionManager) CreateSession(sid string, uid string) (*Session
 		Created: time.Now(),
 		Anon:    false,
 	}
-	err := sm.Store.Set(k, []*Session{sess})
+	err := sm.Store.Put(k, []*Session{sess})
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (sm StandardSessionManager) CreateAnonSession(bid string) (*Session, error)
 		Created: time.Now(),
 		Anon:    true,
 	}
-	err := sm.Store.Set(k, []*Session{anonSess})
+	err := sm.Store.Put(k, []*Session{anonSess})
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +222,7 @@ func (sm StandardSessionManager) UserAppendSession(uid string, sess *Session) er
 	} else {
 		sessions = append(sessions, sess)
 	}
-	return sm.Store.Set(k, sessions)
+	return sm.Store.Put(k, sessions)
 }
 
 func (sm StandardSessionManager) UserRemoveSession(uid string, sess *Session) error {
@@ -244,5 +244,5 @@ func (sm StandardSessionManager) UserRemoveSession(uid string, sess *Session) er
 			newsessions = append(newsessions, s)
 		}
 	}
-	return sm.Store.Set(k, newsessions)
+	return sm.Store.Put(k, newsessions)
 }

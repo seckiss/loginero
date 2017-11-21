@@ -16,5 +16,5 @@ func (dm *StandardDeviceManager) GetDeviceForSession(sid string) (device interfa
 	return dm.Store.Get(sid)
 }
 func (dm *StandardDeviceManager) SetDeviceForSession(sid string, device interface{}) error {
-	return dm.Store.Set(sid, device)
+	return dm.Store.Put(sid, device)
 }

@@ -61,7 +61,7 @@ func (um *StandardUserManager) CreateUser(user interface{}, pass string) (create
 		hash, err := um.Hash(pass)
 		if err == nil {
 			user.(*SimpleUser).Passhash = hash
-			err = um.Store.Set(uid, user)
+			err = um.Store.Put(uid, user)
 			if err == nil {
 				created = true
 			}

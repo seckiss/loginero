@@ -6,7 +6,7 @@ import (
 
 type KeyValueStore interface {
 	Get(k string) (v interface{}, err error)
-	Set(k string, v interface{}) error
+	Put(k string, v interface{}) error
 	Delete(k string) error
 }
 
@@ -29,7 +29,7 @@ func (ss *RamStore) Get(k string) (interface{}, error) {
 	return v, nil
 }
 
-func (ss *RamStore) Set(k string, v interface{}) error {
+func (ss *RamStore) Put(k string, v interface{}) error {
 	ss.MapMutex.Lock()
 	defer ss.MapMutex.Unlock()
 	ss.Map[k] = v

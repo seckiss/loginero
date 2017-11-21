@@ -93,13 +93,13 @@ type StandardSessionManager struct {
 func (sm StandardSessionManager) BindToken(uid string) (token string, err error) {
 	token = generateID()
 	k := "tid:" + token
-	sess := Session{
+	sess := &Session{
 		ID:      k,
 		UID:     uid,
 		Created: time.Now(),
 		Anon:    false,
 	}
-	err = sm.store.Set(k, []*Session{&sess})
+	err = sm.store.Set(k, []*Session{sess})
 	return token, err
 }
 
@@ -145,38 +145,61 @@ func (sm StandardSessionManager) GetAnonSession(bid string) (*Session, error) {
 
 func (sm StandardSessionManager) CreateSession(sid string, uid string) (*Session, error) {
 	k := "sid:" + sid
-	sess := Session{
+	sess := &Session{
 		ID:      k,
 		UID:     uid,
 		Created: time.Now(),
 		Anon:    false,
 	}
-	err := sm.store.Set(k, []*Session{&sess})
+	err := sm.store.Set(k, []*Session{sess})
 	if err != nil {
 		return nil, err
 	}
-	return &sess, nil
+	err = sm.UserAppendSession(uid, sess)
+	if err != nil {
+		return nil, err
+	}
+	return sess, nil
 }
 
 func (sm StandardSessionManager) CreateAnonSession(bid string) (*Session, error) {
 	k := "bid:" + bid
+	uid := bid
 	// Anonymous session points to UID being pure bid
-	anonSess := Session{
+	anonSess := &Session{
 		ID:      k,
-		UID:     bid,
+		UID:     uid,
 		Created: time.Now(),
 		Anon:    true,
 	}
-	err := sm.store.Set(k, []*Session{&anonSess})
+	err := sm.store.Set(k, []*Session{anonSess})
 	if err != nil {
 		return nil, err
 	}
-	return &anonSess, nil
+	err = sm.UserAppendSession(uid, anonSess)
+	if err != nil {
+		return nil, err
+	}
+	return anonSess, nil
 }
 
+// Delete non-anonymous sessions (referenced by sid and not bid)
 func (sm StandardSessionManager) DeleteSession(sid string) error {
 	k := "sid:" + sid
-	err := sm.store.Delete(k)
+
+	sessions, err := sm.store.Get(k)
+	if err != nil {
+		return err
+	}
+	for _, sess := range sessions {
+		uid := sess.UID
+		err = sm.UserRemoveSession(uid, sess)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = sm.store.Delete(k)
 	return err
 }
 

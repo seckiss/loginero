@@ -10,19 +10,12 @@ import (
 )
 
 func main() {
+	//var deviceStore YourKVStore
+	//sdm := &loginero.StandardDeviceManager{
+	//	Store: deviceStore,
+	//}
+	//loginero.DefaultInstance.DeviceMan = sdm
 
-	sdm := &loginero.StandardDeviceManager{
-		store: nil,
-	}
-	/*
-		instance = &loginero.Loginero{
-			SessMan:   ssm,
-			UserMan:   sum,
-			Extractor: extractor,
-			DeviceMan: sdm,
-			context:   make(map[*http.Request]*Context),
-		}
-	*/
 	/////////////////////////////////////////////////////////////////////////////
 	// expected POST requests
 	/////////////////////////////////////////////////////////////////////////////

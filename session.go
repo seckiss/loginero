@@ -2,6 +2,7 @@ package loginero
 
 import (
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -79,11 +80,14 @@ type SessionManager interface {
 	CreateSession(sid string, uid string) (*Session, error)
 	CreateAnonSession(bid string) (*Session, error)
 	DeleteSession(sid string) error
-	GetSessionsForUser(uid string) (sessionids []string, err error)
+	UserGetSessions(uid string) (sessions []*Session, err error)
+	UserAppendSession(uid string, sess *Session) error
+	UserRemoveSession(uid string, sess *Session) error
 }
 
 type StandardSessionManager struct {
 	store SessionStore
+	mutex sync.Mutex
 }
 
 func (sm StandardSessionManager) BindToken(uid string) (token string, err error) {
@@ -176,7 +180,41 @@ func (sm StandardSessionManager) DeleteSession(sid string) error {
 	return err
 }
 
-func (sm StandardSessionManager) GetSessionsForUser(uid string) (sessionids []string, err error) {
-	//TODO
-	return nil, nil
+func (sm StandardSessionManager) UserGetSessions(uid string) (sesssions []*Session, err error) {
+	k := "uid:" + uid
+	return sm.store.Get(k)
+}
+
+func (sm StandardSessionManager) UserAppendSession(uid string, sess *Session) error {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+	k := "uid:" + uid
+	sessions, err := sm.store.Get(k)
+	if err != nil {
+		return err
+	}
+	if len(sessions) == 0 {
+		sessions = []*Session{sess}
+	} else {
+		sessions = append(sessions, sess)
+	}
+	return sm.store.Set(k, sessions)
+}
+
+func (sm StandardSessionManager) UserRemoveSession(uid string, sess *Session) error {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	k := "uid:" + uid
+	sessions, err := sm.store.Get(k)
+	if err != nil {
+		return err
+	}
+	var newsessions []*Session
+	for _, s := range sessions {
+		if s.ID != sess.ID {
+			newsessions = append(newsessions, s)
+		}
+	}
+	return sm.store.Set(k, newsessions)
 }

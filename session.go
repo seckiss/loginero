@@ -32,7 +32,8 @@ func (loginero *Loginero) wrapContext(h http.HandlerFunc, ctx *Context) http.Han
 }
 
 type Session struct {
-	UID     string
+	ID      string //session id with type (bid:xxxx, sid:xxxx, tid:xxxx)
+	UID     string //user id
 	Created time.Time
 	Anon    bool
 }
@@ -88,6 +89,7 @@ func (sm StandardSessionManager) BindToken(uid string) (token string, err error)
 	token = generateID()
 	k := "tid:" + token
 	sess := Session{
+		ID:      k,
 		UID:     uid,
 		Created: time.Now(),
 		Anon:    false,
@@ -136,6 +138,7 @@ func (sm StandardSessionManager) GetAnonSession(bid string) (*Session, error) {
 func (sm StandardSessionManager) CreateSession(sid string, uid string) (*Session, error) {
 	k := "sid:" + sid
 	sess := Session{
+		ID:      k,
 		UID:     uid,
 		Created: time.Now(),
 		Anon:    false,
@@ -145,8 +148,10 @@ func (sm StandardSessionManager) CreateSession(sid string, uid string) (*Session
 
 func (sm StandardSessionManager) CreateAnonSession(bid string) (*Session, error) {
 	k := "bid:" + bid
+	// Anonymous session points to UID being pure bid
 	anonSess := Session{
-		UID:     k,
+		ID:      k,
+		UID:     bid,
 		Created: time.Now(),
 		Anon:    true,
 	}

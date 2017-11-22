@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func p2(fs string, args ...interface{}) {
+func p3(fs string, args ...interface{}) {
 	log.Printf(fs+"\n", args...)
 }
 

@@ -19,10 +19,26 @@ type UserManager interface {
 	HashValid(hash string, pass string) (valid bool)
 }
 
-// type related to particular UserManager implementation
+type User interface {
+	GetUID() string
+	GetPasshash() string
+	WithPasshash(hash string) User
+}
+
 type SimpleUser struct {
 	UID      string
 	Passhash string
+}
+
+func (u SimpleUser) GetUID() string {
+	return u.UID
+}
+func (u SimpleUser) GetPasshash() string {
+	return u.Passhash
+}
+func (u SimpleUser) WithPasshash(hash string) User {
+	u.Passhash = hash
+	return u
 }
 
 type StandardUserManager struct {
@@ -40,10 +56,10 @@ func (um *StandardUserManager) UserExists(uid string) (exists bool, err error) {
 func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated bool, err error) {
 	u, err := um.Store.Get(uid)
 	if err == nil && u != nil {
-		user := u.(SimpleUser)
+		user := u.(User)
 		hash, err := um.Hash(pass)
 		if err == nil {
-			user.Passhash = hash
+			user = user.WithPasshash(hash)
 			err = um.Store.Put(uid, user)
 			if err == nil {
 				updated = true
@@ -55,15 +71,15 @@ func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated 
 
 // return true if user does not exist yet (by uid) and the new one was saved
 func (um *StandardUserManager) CreateUser(userino interface{}, pass string) (created bool, err error) {
-	user := userino.(SimpleUser)
-	uid := user.UID
+	user := userino.(User)
+	uid := user.GetUID()
 	um.mutex.Lock()
 	defer um.mutex.Unlock()
 	exists, err := um.UserExists(uid)
 	if err == nil && !exists {
 		hash, err := um.Hash(pass)
 		if err == nil {
-			user.Passhash = hash
+			user = user.WithPasshash(hash)
 			err = um.Store.Put(uid, user)
 			if err == nil {
 				created = true
@@ -77,8 +93,8 @@ func (um *StandardUserManager) CreateUser(userino interface{}, pass string) (cre
 func (um *StandardUserManager) CredsValid(uid string, pass string) (valid bool, err error) {
 	u, err := um.Store.Get(uid)
 	if err == nil && u != nil {
-		user := u.(SimpleUser)
-		valid = um.HashValid(user.Passhash, pass)
+		user := u.(User)
+		valid = um.HashValid(user.GetPasshash(), pass)
 	}
 	return valid, err
 }

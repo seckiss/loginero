@@ -1,6 +1,8 @@
 package main
 
 import (
+	"../../boltstore"
+	"encoding/gob"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"html"
@@ -11,12 +13,28 @@ import (
 
 func main() {
 
-	//var deviceStore YourKVStore
-	//sdm := &loginero.StandardDeviceManager{
-	//	Store: deviceStore,
-	//}
-	//loginero.DefaultInstance.DeviceMan = sdm
+	gob.Register(loginero.SimpleUser{})
+	gob.Register(loginero.Session{})
+	gob.Register([]loginero.Session{})
 
+	var commonStore loginero.KeyValueStore
+	var err error
+
+	commonStore, err = boltstore.Open("/tmp/basicloginero.db")
+	if err != nil {
+		panic(err)
+	}
+
+	def := loginero.DefaultInstance
+	def.DeviceMan = &loginero.StandardDeviceManager{
+		Store: commonStore,
+	}
+	def.SessMan = &loginero.StandardSessionManager{
+		Store: commonStore,
+	}
+	def.UserMan = &loginero.StandardUserManager{
+		Store: commonStore,
+	}
 	/////////////////////////////////////////////////////////////////////////////
 	// expected POST requests
 	/////////////////////////////////////////////////////////////////////////////
@@ -112,7 +130,7 @@ func handlerFromHtml(html string) http.HandlerFunc {
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	sess, err := loginero.CurrentSession(r)
 	if err != nil {
-		panic(err)
+		fmt.Printf("loginHandler err=%v\n", err)
 	}
 	if sess.Anon {
 		// unlogged
@@ -152,8 +170,14 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 
 func pageHandler(w http.ResponseWriter, r *http.Request) {
 	sess, err := loginero.CurrentSession(r)
+	if err != nil {
+		fmt.Printf("pageHandler 1 err=%v\n", err)
+	}
+
 	sessions, err := loginero.DefaultInstance.SessMan.UserGetSessions(sess.UID)
-	_ = err
+	if err != nil {
+		fmt.Printf("pageHandler 2 err=%v\n", err)
+	}
 
 	s := spew.Sdump(sessions)
 	handlerFromHtml("Current user: "+sess.UID+"<br/>"+html.EscapeString(s))(w, r)

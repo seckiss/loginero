@@ -2,6 +2,7 @@ package loginero
 
 import (
 	crand "crypto/rand"
+	"log"
 	"math"
 	"math/big"
 	mrand "math/rand"
@@ -9,6 +10,10 @@ import (
 	"sync"
 	"time"
 )
+
+func p2(fs string, args ...interface{}) {
+	log.Printf(fs+"\n", args...)
+}
 
 func init() {
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))

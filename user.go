@@ -2,7 +2,6 @@ package loginero
 
 import (
 	"errors"
-	"fmt"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"sync"
@@ -41,26 +40,30 @@ func (um *StandardUserManager) UserExists(uid string) (exists bool, err error) {
 func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated bool, err error) {
 	u, err := um.Store.Get(uid)
 	if err == nil && u != nil {
-		user := u.(*SimpleUser)
+		user := u.(SimpleUser)
 		hash, err := um.Hash(pass)
 		if err == nil {
 			user.Passhash = hash
-			updated = true
+			err = um.Store.Put(uid, user)
+			if err == nil {
+				updated = true
+			}
 		}
 	}
 	return updated, err
 }
 
 // return true if user does not exist yet (by uid) and the new one was saved
-func (um *StandardUserManager) CreateUser(user interface{}, pass string) (created bool, err error) {
-	uid := user.(*SimpleUser).UID
+func (um *StandardUserManager) CreateUser(userino interface{}, pass string) (created bool, err error) {
+	user := userino.(SimpleUser)
+	uid := user.UID
 	um.mutex.Lock()
 	defer um.mutex.Unlock()
 	exists, err := um.UserExists(uid)
 	if err == nil && !exists {
 		hash, err := um.Hash(pass)
 		if err == nil {
-			user.(*SimpleUser).Passhash = hash
+			user.Passhash = hash
 			err = um.Store.Put(uid, user)
 			if err == nil {
 				created = true
@@ -74,9 +77,8 @@ func (um *StandardUserManager) CreateUser(user interface{}, pass string) (create
 func (um *StandardUserManager) CredsValid(uid string, pass string) (valid bool, err error) {
 	u, err := um.Store.Get(uid)
 	if err == nil && u != nil {
-		user := u.(*SimpleUser)
+		user := u.(SimpleUser)
 		valid = um.HashValid(user.Passhash, pass)
-		_ = fmt.Printf
 	}
 	return valid, err
 }
@@ -124,7 +126,7 @@ func (pe *StandardUserExtractor) ExtractNewUser(r *http.Request) (uid string, pa
 	pass1 := r.FormValue("pass1")
 	pass2 := r.FormValue("pass2")
 	if username != "" && pass1 != "" && pass1 == pass2 {
-		return username, pass1, &SimpleUser{UID: username}, nil
+		return username, pass1, SimpleUser{UID: username}, nil
 	}
 	return "", "", nil, errors.New("Wrong POST params")
 }

@@ -9,19 +9,12 @@ import (
 	"github.com/boltdb/bolt"
 )
 
-// KVStore represents the key value store. Use the Open() method to create
-// one, and Close() it when done.
 type BoltStore struct {
 	db *bolt.DB
 }
 
 var (
-	// ErrNotFound is returned when the key supplied to a Get or Delete
-	// method does not exist in the database.
-	ErrNotFound = errors.New("skv: key not found")
-
-	// ErrBadValue is returned when the value supplied to the Put method
-	// is nil.
+	// ErrBadValue is returned when the value supplied to the Put method is nil
 	ErrBadValue = errors.New("skv: bad value")
 
 	bucketName = []byte("kv")
@@ -59,7 +52,7 @@ func (kvs *BoltStore) Put(key string, value interface{}) error {
 	}
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(&value); err != nil {
-		return nil
+		return err
 	}
 	return kvs.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(bucketName).Put([]byte(key), buf.Bytes())
@@ -71,7 +64,7 @@ func (kvs *BoltStore) Get(key string) (interface{}, error) {
 	err := kvs.db.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(bucketName).Cursor()
 		if k, v := c.Seek([]byte(key)); k == nil || string(k) != key {
-			return ErrNotFound
+			return nil
 		} else {
 			d := gob.NewDecoder(bytes.NewReader(v))
 			return d.Decode(&p)
@@ -84,7 +77,7 @@ func (kvs *BoltStore) Delete(key string) error {
 	return kvs.db.Update(func(tx *bolt.Tx) error {
 		c := tx.Bucket(bucketName).Cursor()
 		if k, _ := c.Seek([]byte(key)); k == nil || string(k) != key {
-			return ErrNotFound
+			return nil
 		} else {
 			return c.Delete()
 		}

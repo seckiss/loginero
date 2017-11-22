@@ -18,8 +18,9 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"github.com/boltdb/bolt"
 	"time"
+
+	"github.com/boltdb/bolt"
 )
 
 // KVStore represents the key value store. Use the Open() method to create

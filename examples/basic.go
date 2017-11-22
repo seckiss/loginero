@@ -1,6 +1,7 @@
 package main
 
 import (
+	"../skv"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"html"
@@ -10,6 +11,9 @@ import (
 )
 
 func main() {
+
+	store, err := skv.Open("/tmp/loginero.db")
+
 	//var deviceStore YourKVStore
 	//sdm := &loginero.StandardDeviceManager{
 	//	Store: deviceStore,

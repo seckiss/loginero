@@ -13,8 +13,10 @@ type StandardDeviceManager struct {
 }
 
 func (dm *StandardDeviceManager) GetDeviceForSession(sid string) (device interface{}, err error) {
-	return dm.Store.Get(sid)
+	k := "sid2device:" + sid
+	return dm.Store.Get(k)
 }
 func (dm *StandardDeviceManager) SetDeviceForSession(sid string, device interface{}) error {
-	return dm.Store.Put(sid, device)
+	k := "sid2device:" + sid
+	return dm.Store.Put(k, device)
 }

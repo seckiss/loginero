@@ -56,7 +56,7 @@ type StandardSessionManager struct {
 
 func (sm StandardSessionManager) BindToken(uid string) (token string, err error) {
 	token = generateID()
-	k := "tid:" + token
+	k := "token2sess:" + token
 	sess := Session{
 		ID:       k,
 		UID:      uid,
@@ -69,7 +69,7 @@ func (sm StandardSessionManager) BindToken(uid string) (token string, err error)
 }
 
 func (sm StandardSessionManager) FetchBound(token string) (*Session, error) {
-	k := "tid:" + token
+	k := "token2sess:" + token
 	value, err := sm.Store.Get(k)
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func (sm StandardSessionManager) FetchBound(token string) (*Session, error) {
 }
 
 func (sm StandardSessionManager) GetSession(sid string) (*Session, error) {
-	k := "sid:" + sid
+	k := "sid2sess:" + sid
 	value, err := sm.Store.Get(k)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func (sm StandardSessionManager) GetSession(sid string) (*Session, error) {
 }
 
 func (sm StandardSessionManager) GetAnonSession(bid string) (*Session, error) {
-	k := "bid:" + bid
+	k := "bid2sess:" + bid
 	value, err := sm.Store.Get(k)
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ func (sm StandardSessionManager) GetAnonSession(bid string) (*Session, error) {
 }
 
 func (sm StandardSessionManager) CreateSession(sid string, uid string) (*Session, error) {
-	k := "sid:" + sid
+	k := "sid2sess:" + sid
 	sess := Session{
 		ID:       k,
 		UID:      uid,
@@ -162,7 +162,7 @@ func (sm StandardSessionManager) CreateSession(sid string, uid string) (*Session
 }
 
 func (sm StandardSessionManager) CreateAnonSession(bid string) (*Session, error) {
-	k := "bid:" + bid
+	k := "bid2sess:" + bid
 	uid := bid
 	// Anonymous session points to UID being pure bid
 	anonSess := Session{
@@ -185,7 +185,7 @@ func (sm StandardSessionManager) CreateAnonSession(bid string) (*Session, error)
 
 // Delete non-anonymous sessions (referenced by sid and not bid)
 func (sm StandardSessionManager) DeleteSession(sid string) error {
-	k := "sid:" + sid
+	k := "sid2sess:" + sid
 
 	value, err := sm.Store.Get(k)
 	if err != nil {
@@ -212,7 +212,7 @@ func (sm StandardSessionManager) DeleteSession(sid string) error {
 // also the sessions stored here have no updated Accessed field
 // use only for list of sids
 func (sm StandardSessionManager) UserGetSessions(uid string) (sessions []Session, err error) {
-	k := "uid:" + uid
+	k := "uid2sess:" + uid
 	value, err := sm.Store.Get(k)
 	if err != nil {
 		return nil, err
@@ -226,7 +226,7 @@ func (sm StandardSessionManager) UserGetSessions(uid string) (sessions []Session
 func (sm StandardSessionManager) UserAppendSession(uid string, sess *Session) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
-	k := "uid:" + uid
+	k := "uid2sess:" + uid
 	value, err := sm.Store.Get(k)
 	if err != nil {
 		return err
@@ -247,7 +247,7 @@ func (sm StandardSessionManager) UserRemoveSession(uid string, sess *Session) er
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
-	k := "uid:" + uid
+	k := "uid2sess:" + uid
 	value, err := sm.Store.Get(k)
 	if err != nil {
 		return err

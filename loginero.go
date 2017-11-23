@@ -108,7 +108,7 @@ func (loginero *Loginero) LoginController(loginHandler http.HandlerFunc) http.Ha
 		if valid {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			sess, err := loginero.SessMan.CreateSession(sid, uid)
+			sess, err := loginero.SessMan.CreateSession(sid, uid, false)
 			loginero.wrapContext(loginHandler, &Context{sess, err})(w, r)
 			return
 		} else {
@@ -144,7 +144,7 @@ func (loginero *Loginero) CreateAccountController(createAccountHandler http.Hand
 		if created {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			sess, err := loginero.SessMan.CreateSession(sid, uid)
+			sess, err := loginero.SessMan.CreateSession(sid, uid, false)
 			loginero.wrapContext(createAccountHandler, &Context{sess, err})(w, r)
 			return
 		} else {
@@ -187,7 +187,7 @@ func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc)
 				// TODO should we deactivate all other sessions related to uid?
 				sid := generateID()
 				setSIDCookie(w, sid)
-				sess, err := loginero.SessMan.CreateSession(sid, sess.UID)
+				sess, err := loginero.SessMan.CreateSession(sid, sess.UID, false)
 				loginero.wrapContext(resetHandler, &Context{sess, err})(w, r)
 				return
 			}
@@ -256,12 +256,15 @@ func (loginero *Loginero) browserSessionFallback(r *http.Request) (bid string, s
 	bid = getRequestBID(r)
 	if bid == "" {
 		bid = generateID()
-		sess, err = loginero.SessMan.CreateAnonSession(bid)
+		// create anonymous session with uid=bid
+		sess, err = loginero.SessMan.CreateSession(bid, bid, true)
 	} else {
-		sess, err = loginero.SessMan.GetAnonSession(bid)
+		// get anonymous session
+		sess, err = loginero.SessMan.GetSession(bid)
 		if err == nil && sess == nil {
 			bid = generateID()
-			sess, err = loginero.SessMan.CreateAnonSession(bid)
+			// create anonymous session with uid=bid
+			sess, err = loginero.SessMan.CreateSession(bid, bid, true)
 		}
 	}
 	return bid, sess, err

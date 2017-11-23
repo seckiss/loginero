@@ -11,6 +11,7 @@ import (
 	"log"
 	"loginero"
 	"net/http"
+	"time"
 )
 
 func p(fs string, args ...interface{}) {
@@ -31,6 +32,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	go func() {
+		for {
+			commonStore.(*boltstore.BoltStore).DumpStore()
+			time.Sleep(10 * time.Second)
+		}
+	}()
 
 	def := loginero.DefaultInstance
 	def.DeviceMan = &loginero.StandardDeviceManager{

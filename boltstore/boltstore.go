@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"fmt"
 	"github.com/boltdb/bolt"
 )
 
@@ -87,6 +88,26 @@ func (kvs *BoltStore) Delete(key string) error {
 func (kvs *BoltStore) GetArbitrary() (k string, v interface{}, err error) {
 	//TODO implement
 	return "", nil, nil
+}
+
+func (kvs *BoltStore) DumpStore() (map[string]interface{}, error) {
+	m := make(map[string]interface{})
+	err := kvs.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bucketName).Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			key := string(k)
+			var p interface{}
+			d := gob.NewDecoder(bytes.NewReader(v))
+			err := d.Decode(&p)
+			if err != nil {
+				return err
+			}
+			m[key] = p
+			fmt.Printf("key=%s, value=%s\n", k, p)
+		}
+		return nil
+	})
+	return m, err
 }
 
 // Close closes the key-value store file.

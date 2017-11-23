@@ -80,6 +80,14 @@ func (loginero *Loginero) UserToken(uid string) (token string, err error) {
 	return token, err
 }
 
+func GetDeviceForSession(sid string) (device interface{}, err error) {
+	return DefaultInstance.DeviceMan.GetDeviceForSession(sid)
+}
+
+func SetDeviceForSession(sid string, device interface{}) error {
+	return DefaultInstance.DeviceMan.SetDeviceForSession(sid, device)
+}
+
 func LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
 	return DefaultInstance.LoginController(loginHandler)
 }

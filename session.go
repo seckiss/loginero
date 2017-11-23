@@ -29,22 +29,12 @@ func (loginero *Loginero) wrapContext(h http.HandlerFunc, ctx *Context) http.Han
 }
 
 type Session struct {
-	ID      string //session id with type (bid:xxxx, sid:xxxx, tid:xxxx)
-	UID     string //user id
-	Created time.Time
-	Anon    bool
+	ID       string //session id with type (bid:xxxx, sid:xxxx, tid:xxxx)
+	UID      string //user id
+	Created  time.Time
+	Accessed time.Time
+	Anon     bool
 }
-
-/*
-func (ss *RamSessionStore) Get(k string) ([]*Session, error) {
-	sess, err := ss.KVStore.Get(k)
-	if sess == nil {
-		return nil, err
-	} else {
-		return sess.([]*Session), err
-	}
-}
-*/
 
 type SessionManager interface {
 	BindToken(uid string) (token string, err error)
@@ -68,10 +58,11 @@ func (sm StandardSessionManager) BindToken(uid string) (token string, err error)
 	token = generateID()
 	k := "tid:" + token
 	sess := Session{
-		ID:      k,
-		UID:     uid,
-		Created: time.Now(),
-		Anon:    false,
+		ID:       k,
+		UID:      uid,
+		Created:  time.Now(),
+		Accessed: time.Now(),
+		Anon:     false,
 	}
 	err = sm.Store.Put(k, []Session{sess})
 	return token, err
@@ -93,6 +84,12 @@ func (sm StandardSessionManager) FetchBound(token string) (*Session, error) {
 	}
 	if len(sessions) > 0 {
 		var sess = sessions[0]
+		//update Accessed time
+		sess.Accessed = time.Now()
+		err := sm.Store.Put(k, []Session{sess})
+		if err != nil {
+			return nil, err
+		}
 		return &sess, nil
 	}
 	return nil, nil
@@ -110,6 +107,12 @@ func (sm StandardSessionManager) GetSession(sid string) (*Session, error) {
 	}
 	if len(sessions) > 0 {
 		var sess = sessions[0]
+		//update Accessed time
+		sess.Accessed = time.Now()
+		err := sm.Store.Put(k, []Session{sess})
+		if err != nil {
+			return nil, err
+		}
 		return &sess, nil
 	}
 	return nil, nil
@@ -127,6 +130,12 @@ func (sm StandardSessionManager) GetAnonSession(bid string) (*Session, error) {
 	}
 	if len(sessions) > 0 {
 		var sess = sessions[0]
+		//update Accessed time
+		sess.Accessed = time.Now()
+		err := sm.Store.Put(k, []Session{sess})
+		if err != nil {
+			return nil, err
+		}
 		return &sess, nil
 	}
 	return nil, nil
@@ -135,10 +144,11 @@ func (sm StandardSessionManager) GetAnonSession(bid string) (*Session, error) {
 func (sm StandardSessionManager) CreateSession(sid string, uid string) (*Session, error) {
 	k := "sid:" + sid
 	sess := Session{
-		ID:      k,
-		UID:     uid,
-		Created: time.Now(),
-		Anon:    false,
+		ID:       k,
+		UID:      uid,
+		Created:  time.Now(),
+		Accessed: time.Now(),
+		Anon:     false,
 	}
 	err := sm.Store.Put(k, []Session{sess})
 	if err != nil {
@@ -156,10 +166,11 @@ func (sm StandardSessionManager) CreateAnonSession(bid string) (*Session, error)
 	uid := bid
 	// Anonymous session points to UID being pure bid
 	anonSess := Session{
-		ID:      k,
-		UID:     uid,
-		Created: time.Now(),
-		Anon:    true,
+		ID:       k,
+		UID:      uid,
+		Created:  time.Now(),
+		Accessed: time.Now(),
+		Anon:     true,
 	}
 	err := sm.Store.Put(k, []Session{anonSess})
 	if err != nil {
@@ -196,6 +207,10 @@ func (sm StandardSessionManager) DeleteSession(sid string) error {
 	return err
 }
 
+// return list of sessions linked to the user
+// some may be expired, some may already be deleted from the Store
+// also the sessions stored here have no updated Accessed field
+// use only for list of sids
 func (sm StandardSessionManager) UserGetSessions(uid string) (sessions []Session, err error) {
 	k := "uid:" + uid
 	value, err := sm.Store.Get(k)

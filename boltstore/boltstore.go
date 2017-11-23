@@ -84,6 +84,11 @@ func (kvs *BoltStore) Delete(key string) error {
 	})
 }
 
+func (kvs *BoltStore) GetArbitrary() (k string, v interface{}, err error) {
+	//TODO implement
+	return "", nil, nil
+}
+
 // Close closes the key-value store file.
 func (kvs *BoltStore) Close() error {
 	return kvs.db.Close()

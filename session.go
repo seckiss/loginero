@@ -129,10 +129,13 @@ func (sm StandardSessionManager) CreateSession(id string, uid string, anon bool)
 	if err != nil {
 		return nil, err
 	}
-	// TODO think over, do we need to store session list for anonymous users?   (if !anon {...})
-	err = sm.UserAppendSession(uid, &sess)
-	if err != nil {
-		return nil, err
+	// Anonymous user may only have one session so do not store session list for anon user
+	// This affects the way we retrieve sessions per user, see UserGetSessions()
+	if !anon {
+		err = sm.UserAppendSession(uid, &sess)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &sess, nil
 }
@@ -172,6 +175,21 @@ func (sm StandardSessionManager) UserGetSessions(uid string) (sessions []Session
 	}
 	if value != nil {
 		sessions = value.([]Session)
+	} else {
+		// only non-anonymous users' sessions are stored in session list
+		// for anon try to find a single session
+		if validID(uid) {
+			// anon user has uid=sid
+			sid := uid
+			k := "id2sess:" + sid
+			value, err := sm.Store.Get(k)
+			if err != nil {
+				return nil, err
+			}
+			if value != nil {
+				sessions = value.([]Session)
+			}
+		}
 	}
 	return sessions, nil
 }

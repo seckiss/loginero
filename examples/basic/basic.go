@@ -2,6 +2,7 @@ package main
 
 import (
 	"../../boltstore"
+	//"crypto/sha256"
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
@@ -28,6 +29,7 @@ func main() {
 	gob.Register(loginero.Session{})
 	gob.Register([]loginero.Session{})
 	gob.Register(webpush.Subscription{})
+	gob.Register(WebPushDevice{})
 
 	var err error
 	time.Sleep(time.Millisecond)
@@ -215,9 +217,11 @@ func pageHandler(w http.ResponseWriter, r *http.Request) {
 	*/
 	storemap, err := commonStore.(*boltstore.BoltStore).DumpStore()
 	var users []string
-	for k, _ := range storemap {
-		if strings.HasPrefix(k, "uid2sess:") {
-			button := `<form method="POST" action="/api/v2/pushtrigger"><input type="hidden" name="uid" value="` + k[9:] + `"></input><input type="submit" value="` + k[9:] + `"></input></form>`
+	for k, v := range storemap {
+		if strings.HasPrefix(k, "id2sess:") {
+			sess := v.([]loginero.Session)[0]
+			uid := sess.UID
+			button := `<form method="POST" action="/api/v2/pushtrigger"><input type="hidden" name="uid" value="` + uid + `"></input><input type="submit" value="` + uid + `"></input></form>`
 			users = append(users, button)
 		}
 	}
@@ -242,6 +246,16 @@ func passtokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type WebPushDevice struct {
+	Subscription webpush.Subscription
+}
+
+func (d WebPushDevice) Hash() string {
+	sub := d.Subscription
+	//sum := sha256.Sum256(sub.Endpoint + sub.Keys.Auth + sub.Keys.P256dh)
+	return sub.Keys.P256dh[:20]
+}
+
 func apiPushSubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
@@ -253,13 +267,14 @@ func apiPushSubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p("decoded webpush.Subscription: %+v", sub)
+	device := WebPushDevice{sub}
 
 	sess, err := loginero.CurrentSession(r)
 	if err != nil {
 		p("CurrentSession error: %v", err)
 	}
 
-	err = loginero.SetDeviceForSession(sess.ID, sub)
+	err = loginero.SetDeviceForSession(sess.ID, device)
 
 	if err != nil {
 		p("WebPush save error: %v", err)
@@ -280,7 +295,7 @@ func apiPushTriggerHandler(w http.ResponseWriter, r *http.Request) {
 			panic(err)
 		}
 		if device != nil {
-			sub := device.(webpush.Subscription)
+			sub := device.(WebPushDevice).Subscription
 
 			res, err := webpush.SendNotification([]byte("Trigger!"), &sub, &webpush.Options{
 				Subscriber:      "https://alert.cash",

@@ -25,7 +25,7 @@ var bidName = "LO_BID"
 
 func getRequestBID(r *http.Request) string {
 	c, err := r.Cookie(bidName)
-	if err == nil && validatedID(c.Value) {
+	if err == nil && validID(c.Value) {
 		return c.Value
 	}
 	return ""
@@ -33,13 +33,13 @@ func getRequestBID(r *http.Request) string {
 
 func getRequestSID(r *http.Request) string {
 	c, err := r.Cookie(sidName)
-	if err == nil && validatedID(c.Value) {
+	if err == nil && validID(c.Value) {
 		return c.Value
 	}
 	return ""
 }
 
-func validatedID(id string) bool {
+func validID(id string) bool {
 	return len(id) == 16 && b62regexp.MatchString(id)
 }
 

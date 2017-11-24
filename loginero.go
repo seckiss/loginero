@@ -84,7 +84,7 @@ func GetDeviceForSession(sid string) (device interface{}, err error) {
 	return DefaultInstance.DeviceMan.GetDeviceForSession(sid)
 }
 
-func SetDeviceForSession(sid string, device interface{}) error {
+func SetDeviceForSession(sid string, device Hasher) error {
 	return DefaultInstance.DeviceMan.SetDeviceForSession(sid, device)
 }
 

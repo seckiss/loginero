@@ -2,6 +2,7 @@ package loginero
 
 import (
 	crand "crypto/rand"
+	"fmt"
 	"log"
 	"math"
 	"math/big"
@@ -63,6 +64,8 @@ type Context struct {
 
 var DefaultInstance *Loginero
 var tokenExpireTime = 30 * time.Minute
+var namedSessionExpireTime = 3 * time.Hour
+var anonSessionExpireTime = 365 * 24 * time.Hour
 
 func CurrentSession(r *http.Request) (*Session, error) {
 	return DefaultInstance.CurrentSession(r)
@@ -72,58 +75,75 @@ func UserToken(uid string) (token string, err error) {
 	return DefaultInstance.UserToken(uid)
 }
 
-func (loginero *Loginero) UserToken(uid string) (token string, err error) {
-	exists, err := loginero.UserMan.UserExists(uid)
+func (lo *Loginero) UserToken(uid string) (token string, err error) {
+	exists, err := lo.UserMan.UserExists(uid)
 	if err == nil && exists {
-		token, err = loginero.SessMan.BindToken(uid)
+		token, err = lo.SessMan.BindToken(uid)
 	}
 	return token, err
 }
 
-func GetDeviceForSession(sid string) (device interface{}, err error) {
-	return DefaultInstance.DeviceMan.GetDeviceForSession(sid)
+func GetDeviceForSession(id string) (device Hasher, err error) {
+	return DefaultInstance.GetDeviceForSession(id)
 }
-
-func SetDeviceForSession(sid string, device Hasher) error {
-	return DefaultInstance.DeviceMan.SetDeviceForSession(sid, device)
+func (lo *Loginero) GetDeviceForSession(id string) (device Hasher, err error) {
+	// first check if session is not expired by calling GetSession (which deletes expired sessions)
+	session, err := lo.SessMan.GetSession(id)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("151515: session=%+v\n", session)
+	if session == nil {
+		lo.DeviceMan.DeleteDeviceForSession(id, device)
+		return nil, nil
+	}
+	return lo.DeviceMan.GetDeviceForSession(id)
 }
-
+func SetDeviceForSession(session *Session, device Hasher) error {
+	return DefaultInstance.SetDeviceForSession(session, device)
+}
+func (lo *Loginero) SetDeviceForSession(session *Session, device Hasher) error {
+	return lo.DeviceMan.SetDeviceForSession(session, device)
+}
 func UserGetSessions(uid string) (sessions []Session, err error) {
-	return DefaultInstance.SessMan.UserGetSessions(uid)
+	return DefaultInstance.UserGetSessions(uid)
+}
+func (lo *Loginero) UserGetSessions(uid string) (sessions []Session, err error) {
+	return lo.SessMan.UserGetSessions(uid)
 }
 
 func LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
 	return DefaultInstance.LoginController(loginHandler)
 }
 
-func (loginero *Loginero) LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
+func (lo *Loginero) LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid, pass, err := loginero.Extractor.ExtractLogin(r)
+		uid, pass, err := lo.Extractor.ExtractLogin(r)
 		if err != nil {
-			loginero.wrapContext(loginHandler, &Context{nil, err})(w, r)
+			lo.wrapContext(loginHandler, &Context{nil, err})(w, r)
 			return
 		}
-		valid, err := loginero.UserMan.CredsValid(uid, pass)
+		valid, err := lo.UserMan.CredsValid(uid, pass)
 		if err != nil {
-			loginero.wrapContext(loginHandler, &Context{nil, err})(w, r)
+			lo.wrapContext(loginHandler, &Context{nil, err})(w, r)
 			return
 		}
 
 		if valid {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			sess, err := loginero.SessMan.CreateSession(sid, uid, false)
-			loginero.wrapContext(loginHandler, &Context{sess, err})(w, r)
+			sess, err := lo.SessMan.CreateSession(sid, uid, false)
+			lo.wrapContext(loginHandler, &Context{sess, err})(w, r)
 			return
 		} else {
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				loginero.SessMan.DeleteSession(sid)
+				lo.SessMan.DeleteSession(sid)
 			}
-			bid, sess, err := loginero.browserSessionFallback(r)
+			bid, sess, err := lo.browserSessionFallback(r)
 			setBIDCookie(w, bid)
-			loginero.wrapContext(loginHandler, &Context{sess, err})(w, r)
+			lo.wrapContext(loginHandler, &Context{sess, err})(w, r)
 			return
 		}
 	}
@@ -133,33 +153,33 @@ func CreateAccountController(createAccountHandler http.HandlerFunc) http.Handler
 	return DefaultInstance.CreateAccountController(createAccountHandler)
 }
 
-func (loginero *Loginero) CreateAccountController(createAccountHandler http.HandlerFunc) http.HandlerFunc {
+func (lo *Loginero) CreateAccountController(createAccountHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid, pass, user, err := loginero.Extractor.ExtractNewUser(r)
+		uid, pass, user, err := lo.Extractor.ExtractNewUser(r)
 		if err != nil {
-			loginero.wrapContext(createAccountHandler, &Context{nil, err})(w, r)
+			lo.wrapContext(createAccountHandler, &Context{nil, err})(w, r)
 			return
 		}
-		created, err := loginero.UserMan.CreateUser(user, pass)
+		created, err := lo.UserMan.CreateUser(user, pass)
 		if err != nil {
-			loginero.wrapContext(createAccountHandler, &Context{nil, err})(w, r)
+			lo.wrapContext(createAccountHandler, &Context{nil, err})(w, r)
 			return
 		}
 		if created {
 			sid := generateID()
 			setSIDCookie(w, sid)
-			sess, err := loginero.SessMan.CreateSession(sid, uid, false)
-			loginero.wrapContext(createAccountHandler, &Context{sess, err})(w, r)
+			sess, err := lo.SessMan.CreateSession(sid, uid, false)
+			lo.wrapContext(createAccountHandler, &Context{sess, err})(w, r)
 			return
 		} else {
 			sid := getRequestSID(r)
 			if sid != "" {
 				deleteSIDCookie(w)
-				loginero.SessMan.DeleteSession(sid)
+				lo.SessMan.DeleteSession(sid)
 			}
-			bid, sess, err := loginero.browserSessionFallback(r)
+			bid, sess, err := lo.browserSessionFallback(r)
 			setBIDCookie(w, bid)
-			loginero.wrapContext(createAccountHandler, &Context{sess, err})(w, r)
+			lo.wrapContext(createAccountHandler, &Context{sess, err})(w, r)
 			return
 		}
 	}
@@ -169,30 +189,30 @@ func ResetPasswordController(resetHandler http.HandlerFunc) http.HandlerFunc {
 	return DefaultInstance.ResetPasswordController(resetHandler)
 }
 
-func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc) http.HandlerFunc {
+func (lo *Loginero) ResetPasswordController(resetHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token, pass, err := loginero.Extractor.ExtractTokenPass(r)
+		token, pass, err := lo.Extractor.ExtractTokenPass(r)
 		if err != nil {
-			loginero.wrapContext(resetHandler, &Context{nil, err})(w, r)
+			lo.wrapContext(resetHandler, &Context{nil, err})(w, r)
 			return
 		}
-		sess, err := loginero.SessMan.FetchBound(token)
+		sess, err := lo.SessMan.FetchBound(token)
 		if err != nil {
-			loginero.wrapContext(resetHandler, &Context{nil, err})(w, r)
+			lo.wrapContext(resetHandler, &Context{nil, err})(w, r)
 			return
 		}
 		if sess != nil && time.Now().Sub(sess.Created) < tokenExpireTime {
-			updated, err := loginero.UserMan.UpdatePassword(sess.UID, pass)
+			updated, err := lo.UserMan.UpdatePassword(sess.UID, pass)
 			if err != nil {
-				loginero.wrapContext(resetHandler, &Context{nil, err})(w, r)
+				lo.wrapContext(resetHandler, &Context{nil, err})(w, r)
 				return
 			}
 			if updated {
 				// TODO should we deactivate all other sessions related to uid?
 				sid := generateID()
 				setSIDCookie(w, sid)
-				sess, err := loginero.SessMan.CreateSession(sid, sess.UID, false)
-				loginero.wrapContext(resetHandler, &Context{sess, err})(w, r)
+				sess, err := lo.SessMan.CreateSession(sid, sess.UID, false)
+				lo.wrapContext(resetHandler, &Context{sess, err})(w, r)
 				return
 			}
 		}
@@ -200,11 +220,11 @@ func (loginero *Loginero) ResetPasswordController(resetHandler http.HandlerFunc)
 		sid := getRequestSID(r)
 		if sid != "" {
 			deleteSIDCookie(w)
-			loginero.SessMan.DeleteSession(sid)
+			lo.SessMan.DeleteSession(sid)
 		}
-		bid, sess, err := loginero.browserSessionFallback(r)
+		bid, sess, err := lo.browserSessionFallback(r)
 		setBIDCookie(w, bid)
-		loginero.wrapContext(resetHandler, &Context{sess, err})(w, r)
+		lo.wrapContext(resetHandler, &Context{sess, err})(w, r)
 		return
 	}
 }
@@ -213,26 +233,29 @@ func PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
 	return DefaultInstance.PageController(pageHandler)
 }
 
-func (loginero *Loginero) PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
+func (lo *Loginero) PageController(pageHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sid := getRequestSID(r)
 		if sid != "" {
-			sess, err := loginero.SessMan.GetSession(sid)
+			sess, err := lo.SessMan.GetSession(sid)
+			if err == nil && sess != nil {
+				err = lo.SessMan.AccessSession(sid)
+			}
 			if err != nil {
-				loginero.wrapContext(pageHandler, &Context{nil, err})(w, r)
+				lo.wrapContext(pageHandler, &Context{nil, err})(w, r)
 				return
 			}
 			if sess != nil {
 				setSIDCookie(w, sid)
-				loginero.wrapContext(pageHandler, &Context{sess, nil})(w, r)
+				lo.wrapContext(pageHandler, &Context{sess, nil})(w, r)
 				return
 			} else {
 				deleteSIDCookie(w)
 			}
 		}
-		bid, sess, err := loginero.browserSessionFallback(r)
+		bid, sess, err := lo.browserSessionFallback(r)
 		setBIDCookie(w, bid)
-		loginero.wrapContext(pageHandler, &Context{sess, err})(w, r)
+		lo.wrapContext(pageHandler, &Context{sess, err})(w, r)
 		return
 	}
 }
@@ -241,35 +264,39 @@ func LogoutController(logoutHandler http.HandlerFunc) http.HandlerFunc {
 	return DefaultInstance.LogoutController(logoutHandler)
 }
 
-func (loginero *Loginero) LogoutController(logoutHandler http.HandlerFunc) http.HandlerFunc {
+func (lo *Loginero) LogoutController(logoutHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sid := getRequestSID(r)
 		if sid != "" {
 			deleteSIDCookie(w)
-			loginero.SessMan.DeleteSession(sid)
+			lo.SessMan.DeleteSession(sid)
 		}
-		bid, sess, err := loginero.browserSessionFallback(r)
+		bid, sess, err := lo.browserSessionFallback(r)
 		setBIDCookie(w, bid)
-		loginero.wrapContext(logoutHandler, &Context{sess, err})(w, r)
+		lo.wrapContext(logoutHandler, &Context{sess, err})(w, r)
 		return
 	}
 }
 
-func (loginero *Loginero) browserSessionFallback(r *http.Request) (bid string, sess *Session, err error) {
+func (lo *Loginero) browserSessionFallback(r *http.Request) (bid string, sess *Session, err error) {
 	// fallback - pass anonymous browser user
 	bid = getRequestBID(r)
 	if bid == "" {
 		bid = generateID()
 		// create anonymous session with uid=bid
-		sess, err = loginero.SessMan.CreateSession(bid, bid, true)
+		sess, err = lo.SessMan.CreateSession(bid, bid, true)
 	} else {
 		// get anonymous session
-		sess, err = loginero.SessMan.GetSession(bid)
+		sess, err = lo.SessMan.GetSession(bid)
+		if err == nil && sess != nil {
+			err = lo.SessMan.AccessSession(bid)
+		}
 		if err == nil && sess == nil {
 			bid = generateID()
 			// create anonymous session with uid=bid
-			sess, err = loginero.SessMan.CreateSession(bid, bid, true)
+			sess, err = lo.SessMan.CreateSession(bid, bid, true)
 		}
+
 	}
 	return bid, sess, err
 }

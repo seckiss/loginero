@@ -30,6 +30,7 @@ func main() {
 	gob.Register([]loginero.Session{})
 	gob.Register(webpush.Subscription{})
 	gob.Register(WebPushDevice{})
+	gob.Register(time.Time{})
 
 	var err error
 	time.Sleep(time.Millisecond)
@@ -203,7 +204,7 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func pageHandler(w http.ResponseWriter, r *http.Request) {
-	sess, err := loginero.CurrentSession(r)
+	session, err := loginero.CurrentSession(r)
 	if err != nil {
 		fmt.Printf("pageHandler 1 err=%v\n", err)
 	}
@@ -233,7 +234,7 @@ func pageHandler(w http.ResponseWriter, r *http.Request) {
 		s += "<tr><td>" + html.EscapeString(k) + "</td><td>" + html.EscapeString(spew.Sdump(v)) + "</td></tr>"
 	}
 	s += `</table>`
-	handlerFromHtml("Current user: "+sess.UID+"<br/><pre>"+s+"</pre><br/><br/><hr/><br/>"+webpushScript)(w, r)
+	handlerFromHtml("Current user: "+session.UID+"<br/><pre>"+s+"</pre><br/><br/><hr/><br/>"+webpushScript)(w, r)
 }
 
 func passtokenHandler(w http.ResponseWriter, r *http.Request) {
@@ -274,7 +275,7 @@ func apiPushSubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 		p("CurrentSession error: %v", err)
 	}
 
-	err = loginero.SetDeviceForSession(sess.ID, device)
+	err = loginero.SetDeviceForSession(sess, device)
 
 	if err != nil {
 		p("WebPush save error: %v", err)
@@ -294,6 +295,7 @@ func apiPushTriggerHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			panic(err)
 		}
+		p("1111111: device=%+v", device)
 		if device != nil {
 			sub := device.(WebPushDevice).Subscription
 
@@ -307,6 +309,7 @@ func apiPushTriggerHandler(w http.ResponseWriter, r *http.Request) {
 			p("SendNotification Status: %v", res.Status)
 		}
 	}
+	http.Redirect(w, r, "/page", http.StatusSeeOther)
 
 }
 

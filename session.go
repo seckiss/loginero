@@ -6,6 +6,14 @@ import (
 	"time"
 )
 
+// Device represents a browser and not a physical device
+// It may be for example WebPush subscription that is stable per (browser, domain)
+// Device must implement Hasher interface to calculate unique Hash() of the device
+
+type Hasher interface {
+	Hash() string
+}
+
 func (lo *Loginero) CurrentSession(r *http.Request) (*Session, error) {
 	lo.contextMutex.RLock()
 	defer lo.contextMutex.RUnlock()
@@ -36,15 +44,23 @@ type Session struct {
 }
 
 type SessionManager interface {
-	BindToken(uid string) (token string, err error)
-	FetchBound(token string) (*Session, error)
+	// Core session
 	GetSession(id string) (*Session, error)
 	AccessSession(id string) error
 	CreateSession(id string, uid string, anon bool) (*Session, error)
 	DeleteSession(id string) error
+	// Token related
+	BindToken(uid string) (token string, err error)
+	FetchBound(token string) (*Session, error)
+	// User related
 	UserGetSessions(uid string) (sessions []Session, err error)
 	UserAppendSession(uid string, sess *Session) error
 	UserRemoveSession(uid string, sess *Session) error
+	// Device related
+	GetDeviceForSession(id string) (device Hasher, err error)
+	SetDeviceForSession(session *Session, device Hasher) error
+	DeleteDeviceForSession(sessionid string, device Hasher) error
+	CurrentSessionForDevice(device Hasher) (id string, err error)
 }
 
 type StandardSessionManager struct {
@@ -173,6 +189,7 @@ func (sm StandardSessionManager) DeleteSession(id string) error {
 	if value != nil {
 		sessions = value.([]Session)
 	}
+	// delete session from the list per user
 	for _, sess := range sessions {
 		uid := sess.UID
 		err = sm.UserRemoveSession(uid, &sess)
@@ -180,13 +197,23 @@ func (sm StandardSessionManager) DeleteSession(id string) error {
 			return err
 		}
 	}
-
+	// delete actual session
 	err = sm.Store.Delete(k)
 	if err != nil {
 		return err
 	}
-	// delete also last accessed timestamp
+	// also delete last accessed timestamp
 	err = sm.Store.Delete("id2accessed:" + id)
+	if err != nil {
+		return err
+	}
+	/*
+		// also session id to device mapping
+		err = sm.Store.Delete("id2device:" + id)
+		if err != nil {
+			return err
+		}
+	*/
 	return err
 }
 
@@ -261,4 +288,111 @@ func (sm StandardSessionManager) UserRemoveSession(uid string, sess *Session) er
 		}
 	}
 	return sm.Store.Put(k, newsessions)
+}
+
+// return empty string if session not found for device
+// return only valid existing session
+func (sm *StandardSessionManager) CurrentSessionForDevice(device Hasher) (id string, err error) {
+	// first try to find named session id
+	k := "device2sid:" + device.Hash()
+	value, err := sm.Store.Get(k)
+	if err != nil {
+		return "", err
+	}
+	if value != nil {
+		id := value.(string)
+		// return session id only if it is valid
+		session, err := sm.GetSession(id)
+		if err != nil {
+			return "", err
+		}
+		if session != nil {
+			return id, nil
+		}
+	}
+	// otherwise try to find anonymous session
+	k = "device2bid:" + device.Hash()
+	value, err = sm.Store.Get(k)
+	if err != nil {
+		return "", err
+	}
+	if value != nil {
+		id := value.(string)
+		// return session id only if it is valid
+		session, err := sm.GetSession(id)
+		if err != nil {
+			return "", err
+		}
+		if session != nil {
+			return id, nil
+		}
+	}
+	return "", nil
+}
+
+func (sm *StandardSessionManager) GetDeviceForSession(id string) (device Hasher, err error) {
+	// first check if session is not expired by calling GetSession (which deletes expired sessions)
+	session, err := sm.GetSession(id)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		sm.DeleteDeviceForSession(id, device)
+		return nil, nil
+	}
+	// now if session exists search for device
+	k := "id2device:" + id
+	value, err := sm.Store.Get(k)
+	if err != nil {
+		return nil, err
+	}
+	if value == nil {
+		return nil, nil
+	}
+	device = value.(Hasher)
+	// on a single device multiple sessions could have been created
+	// return the device only when this is a device for its CURRENT session
+	// that is valid (exists as per GetSession())
+	deviceSessionId, err := sm.CurrentSessionForDevice(device)
+	if err != nil {
+		return nil, err
+	}
+	if deviceSessionId == id {
+		return device, nil
+	}
+	return nil, nil
+}
+
+func (sm *StandardSessionManager) SetDeviceForSession(session *Session, device Hasher) error {
+	id := session.ID
+	k := "id2device:" + id
+	err := sm.Store.Put(k, device)
+	if err != nil {
+		return err
+	}
+	//save last session id that the device was attached to
+	if session.Anon {
+		k = "device2bid:" + device.Hash()
+	} else {
+		k = "device2sid:" + device.Hash()
+	}
+	return sm.Store.Put(k, id)
+}
+
+func (sm *StandardSessionManager) DeleteDeviceForSession(sessionid string, device Hasher) error {
+	k := "id2device:" + sessionid
+	err := sm.Store.Delete(k)
+	if err != nil {
+		return err
+	}
+	dhash := device.Hash()
+	err = sm.Store.Delete("device2bid:" + dhash)
+	if err != nil {
+		return err
+	}
+	err = sm.Store.Delete("device2sid:" + dhash)
+	if err != nil {
+		return err
+	}
+	return nil
 }

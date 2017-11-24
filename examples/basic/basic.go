@@ -48,9 +48,6 @@ func main() {
 		}()
 	*/
 	def := loginero.DefaultInstance
-	def.DeviceMan = &loginero.StandardDeviceManager{
-		Store: commonStore,
-	}
 	def.SessMan = &loginero.StandardSessionManager{
 		Store: commonStore,
 	}

@@ -2,7 +2,6 @@ package loginero
 
 import (
 	crand "crypto/rand"
-	"fmt"
 	"log"
 	"math"
 	"math/big"
@@ -28,7 +27,6 @@ func init() {
 	// since theses stores have different requirements
 	sessionStore := NewRamStore()
 	userStore := NewRamStore()
-	deviceStore := NewRamStore()
 	ssm := &StandardSessionManager{
 		Store: sessionStore,
 	}
@@ -36,14 +34,10 @@ func init() {
 		Store: userStore,
 	}
 	extractor := &StandardUserExtractor{}
-	sdm := &StandardDeviceManager{
-		Store: deviceStore,
-	}
 	DefaultInstance = &Loginero{
 		SessMan:   ssm,
 		UserMan:   sum,
 		Extractor: extractor,
-		DeviceMan: sdm,
 		context:   make(map[*http.Request]*Context),
 	}
 }
@@ -52,7 +46,6 @@ type Loginero struct {
 	SessMan      SessionManager
 	UserMan      UserManager
 	Extractor    UserExtractor
-	DeviceMan    DeviceManager
 	context      map[*http.Request]*Context
 	contextMutex sync.RWMutex
 }
@@ -86,24 +79,15 @@ func (lo *Loginero) UserToken(uid string) (token string, err error) {
 func GetDeviceForSession(id string) (device Hasher, err error) {
 	return DefaultInstance.GetDeviceForSession(id)
 }
+
 func (lo *Loginero) GetDeviceForSession(id string) (device Hasher, err error) {
-	// first check if session is not expired by calling GetSession (which deletes expired sessions)
-	session, err := lo.SessMan.GetSession(id)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Printf("151515: session=%+v\n", session)
-	if session == nil {
-		lo.DeviceMan.DeleteDeviceForSession(id, device)
-		return nil, nil
-	}
-	return lo.DeviceMan.GetDeviceForSession(id)
+	return lo.SessMan.GetDeviceForSession(id)
 }
 func SetDeviceForSession(session *Session, device Hasher) error {
 	return DefaultInstance.SetDeviceForSession(session, device)
 }
 func (lo *Loginero) SetDeviceForSession(session *Session, device Hasher) error {
-	return lo.DeviceMan.SetDeviceForSession(session, device)
+	return lo.SessMan.SetDeviceForSession(session, device)
 }
 func UserGetSessions(uid string) (sessions []Session, err error) {
 	return DefaultInstance.UserGetSessions(uid)

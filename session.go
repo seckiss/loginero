@@ -129,6 +129,7 @@ func (sm StandardSessionManager) CreateSession(id string, uid string, anon bool)
 	if err != nil {
 		return nil, err
 	}
+	// TODO think over, do we need to store session list for anonymous users?   (if !anon {...})
 	err = sm.UserAppendSession(uid, &sess)
 	if err != nil {
 		return nil, err

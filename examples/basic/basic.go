@@ -11,8 +11,12 @@ import (
 	"log"
 	"loginero"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 )
+
+var commonStore loginero.KeyValueStore
 
 func p(fs string, args ...interface{}) {
 	log.Printf(fs+"\n", args...)
@@ -25,20 +29,21 @@ func main() {
 	gob.Register([]loginero.Session{})
 	gob.Register(webpush.Subscription{})
 
-	var commonStore loginero.KeyValueStore
 	var err error
+	time.Sleep(time.Millisecond)
 
 	commonStore, err = boltstore.Open("/tmp/basicloginero.db")
 	if err != nil {
 		panic(err)
 	}
-	go func() {
-		for {
-			commonStore.(*boltstore.BoltStore).DumpStore()
-			time.Sleep(10 * time.Second)
-		}
-	}()
-
+	/*
+		go func() {
+			for {
+				commonStore.(*boltstore.BoltStore).DumpStore()
+				time.Sleep(10 * time.Second)
+			}
+		}()
+	*/
 	def := loginero.DefaultInstance
 	def.DeviceMan = &loginero.StandardDeviceManager{
 		Store: commonStore,
@@ -61,7 +66,9 @@ func main() {
 	http.HandleFunc("/forgot", passtokenHandler)
 
 	// push subscription
-	http.HandleFunc("/api/v2/pushsubscription", loginero.PageController(apiPushsubscriptionHandler))
+	http.HandleFunc("/api/v2/pushsubscription", loginero.PageController(apiPushSubscriptionHandler))
+	// push trigger
+	http.HandleFunc("/api/v2/pushtrigger", loginero.PageController(apiPushTriggerHandler))
 
 	/////////////////////////////////////////////////////////////////////////////
 	// expected GET requests
@@ -198,14 +205,31 @@ func pageHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Printf("pageHandler 1 err=%v\n", err)
 	}
+	/*
+		sessions, err := loginero.DefaultInstance.SessMan.UserGetSessions(sess.UID)
+		if err != nil {
+			fmt.Printf("pageHandler 2 err=%v\n", err)
+		}
 
-	sessions, err := loginero.DefaultInstance.SessMan.UserGetSessions(sess.UID)
-	if err != nil {
-		fmt.Printf("pageHandler 2 err=%v\n", err)
+		s := spew.Sdump(sessions)
+	*/
+	storemap, err := commonStore.(*boltstore.BoltStore).DumpStore()
+	var users []string
+	for k, _ := range storemap {
+		if strings.HasPrefix(k, "uid2sess:") {
+			button := `<form method="POST" action="/api/v2/pushtrigger"><input type="hidden" name="uid" value="` + k[9:] + `"></input><input type="submit" value="` + k[9:] + `"></input></form>`
+			users = append(users, button)
+		}
 	}
-
-	s := spew.Sdump(sessions)
-	handlerFromHtml("Current user: "+sess.UID+"<br/>"+html.EscapeString(s)+"<br/><br/><hr/><br/>"+webpushScript)(w, r)
+	var s string
+	s += strings.Join(users, "")
+	s += "<hr/>"
+	s += `<table>`
+	for k, v := range storemap {
+		s += "<tr><td>" + html.EscapeString(k) + "</td><td>" + html.EscapeString(spew.Sdump(v)) + "</td></tr>"
+	}
+	s += `</table>`
+	handlerFromHtml("Current user: "+sess.UID+"<br/><pre>"+s+"</pre><br/><br/><hr/><br/>"+webpushScript)(w, r)
 }
 
 func passtokenHandler(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +242,7 @@ func passtokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func apiPushsubscriptionHandler(w http.ResponseWriter, r *http.Request) {
+func apiPushSubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
 	var sub = webpush.Subscription{}
@@ -239,7 +263,36 @@ func apiPushsubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		p("WebPush save error: %v", err)
+	} else {
+		p("WebPush saved for session id %s", sess.ID)
 	}
+}
+
+func apiPushTriggerHandler(w http.ResponseWriter, r *http.Request) {
+	uid := r.FormValue("uid")
+	sessions, err := loginero.UserGetSessions(uid)
+	if err != nil {
+		panic(err)
+	}
+	for _, session := range sessions {
+		device, err := loginero.GetDeviceForSession(session.ID)
+		if err != nil {
+			panic(err)
+		}
+		if device != nil {
+			sub := device.(webpush.Subscription)
+
+			res, err := webpush.SendNotification([]byte("Trigger!"), &sub, &webpush.Options{
+				Subscriber:      "https://alert.cash",
+				VAPIDPrivateKey: os.Getenv("WEBPUSH_VAPID_PRIVATE"),
+			})
+			if err != nil {
+				panic(err)
+			}
+			p("SendNotification Status: %v", res.Status)
+		}
+	}
+
 }
 
 var webpushScript = `
@@ -307,7 +360,7 @@ var webpushScript = `
             swRegistration.pushManager.subscribe(pushOptions).then(
               (subscription) => {
                 var s = JSON.stringify(subscription, null, 2);
-                fetch('/api/v2/pushsubscription', {method: 'post', body: s}).then(function(response) {
+                fetch('/api/v2/pushsubscription', {method: 'post', body: s, credentials: 'include'}).then(function(response) {
                     console.log('subscription posted: %o', s);
                     console.log('pushsubscription response: %o', response);
                   });
@@ -350,7 +403,7 @@ self.addEventListener('push', function(event) {
   if (event.data) {
     const dataText = event.data.text();
     notificationTitle = 'Received Payload';
-    notificationOptions.body = 'Push data: ${dataText}';
+    notificationOptions.body = 'Push data: ' + dataText;
   }
 
   event.waitUntil(

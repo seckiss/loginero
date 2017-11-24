@@ -88,6 +88,10 @@ func SetDeviceForSession(sid string, device interface{}) error {
 	return DefaultInstance.DeviceMan.SetDeviceForSession(sid, device)
 }
 
+func UserGetSessions(uid string) (sessions []Session, err error) {
+	return DefaultInstance.SessMan.UserGetSessions(uid)
+}
+
 func LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
 	return DefaultInstance.LoginController(loginHandler)
 }

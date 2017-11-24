@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"fmt"
 	"github.com/boltdb/bolt"
 )
 
@@ -103,7 +102,6 @@ func (kvs *BoltStore) DumpStore() (map[string]interface{}, error) {
 				return err
 			}
 			m[key] = p
-			fmt.Printf("key=%s, value=%s\n", k, p)
 		}
 		return nil
 	})

@@ -49,10 +49,10 @@ func main() {
 	*/
 	def := loginero.DefaultInstance
 	def.SessMan = &loginero.StandardSessionManager{
-		Store: commonStore,
+		Store: loginero.StoreAdapter{commonStore},
 	}
 	def.UserMan = &loginero.StandardUserManager{
-		Store: commonStore,
+		Store: loginero.StoreAdapter{commonStore},
 	}
 	/////////////////////////////////////////////////////////////////////////////
 	// expected POST requests

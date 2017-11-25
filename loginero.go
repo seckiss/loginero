@@ -25,8 +25,8 @@ func init() {
 	// we use 3 simplest RAM Key-Value stores here
 	// but in production it may be a different storage base
 	// since theses stores have different requirements
-	sessionStore := NewRamStore()
-	userStore := NewRamStore()
+	sessionStore := StoreAdapter{NewRamStore()}
+	userStore := StoreAdapter{NewRamStore()}
 	ssm := &StandardSessionManager{
 		Store: sessionStore,
 	}

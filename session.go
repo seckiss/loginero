@@ -64,30 +64,28 @@ type SessionManager interface {
 }
 
 type StandardSessionManager struct {
-	Store KeyValueStore
+	Store TypeKeyValueStore
 	mutex sync.Mutex
 }
 
 func (sm StandardSessionManager) BindToken(uid string) (token string, err error) {
 	token = generateID()
-	k := "token2sess:" + token
 	sess := Session{
 		ID:      token,
 		UID:     uid,
 		Created: time.Now(),
 		Anon:    false,
 	}
-	err = sm.Store.Put(k, []Session{sess})
+	err = sm.Store.Put("token2sess", token, []Session{sess})
 	return token, err
 }
 
 func (sm StandardSessionManager) FetchBound(token string) (*Session, error) {
-	k := "token2sess:" + token
-	value, err := sm.Store.Get(k)
+	value, err := sm.Store.Get("token2sess", token)
 	if err != nil {
 		return nil, err
 	}
-	err = sm.Store.Delete(k)
+	err = sm.Store.Delete("token2sess", token)
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +101,7 @@ func (sm StandardSessionManager) FetchBound(token string) (*Session, error) {
 }
 
 func (sm StandardSessionManager) GetSession(id string) (*Session, error) {
-	k := "id2sess:" + id
-	value, err := sm.Store.Get(k)
+	value, err := sm.Store.Get("id2sess", id)
 	if err != nil {
 		return nil, err
 	}
@@ -133,8 +130,7 @@ func (sm StandardSessionManager) GetSession(id string) (*Session, error) {
 }
 
 func (sm StandardSessionManager) SessionLastAccessed(id string) (*time.Time, error) {
-	k := "id2accessed:" + id
-	value, err := sm.Store.Get(k)
+	value, err := sm.Store.Get("id2accessed", id)
 	if err != nil {
 		return nil, err
 	}
@@ -146,19 +142,17 @@ func (sm StandardSessionManager) SessionLastAccessed(id string) (*time.Time, err
 }
 
 func (sm StandardSessionManager) AccessSession(id string) error {
-	k := "id2accessed:" + id
-	return sm.Store.Put(k, time.Now())
+	return sm.Store.Put("id2accessed", id, time.Now())
 }
 
 func (sm StandardSessionManager) CreateSession(id string, uid string, anon bool) (*Session, error) {
-	k := "id2sess:" + id
 	sess := Session{
 		ID:      id,
 		UID:     uid,
 		Created: time.Now(),
 		Anon:    anon,
 	}
-	err := sm.Store.Put(k, []Session{sess})
+	err := sm.Store.Put("id2sess", id, []Session{sess})
 	if err != nil {
 		return nil, err
 	}
@@ -179,9 +173,7 @@ func (sm StandardSessionManager) CreateSession(id string, uid string, anon bool)
 }
 
 func (sm StandardSessionManager) DeleteSession(id string) error {
-	k := "id2sess:" + id
-
-	value, err := sm.Store.Get(k)
+	value, err := sm.Store.Get("id2sess", id)
 	if err != nil {
 		return err
 	}
@@ -198,12 +190,12 @@ func (sm StandardSessionManager) DeleteSession(id string) error {
 		}
 	}
 	// delete actual session
-	err = sm.Store.Delete(k)
+	err = sm.Store.Delete("id2sess", id)
 	if err != nil {
 		return err
 	}
 	// also delete last accessed timestamp
-	err = sm.Store.Delete("id2accessed:" + id)
+	err = sm.Store.Delete("id2accessed", id)
 	if err != nil {
 		return err
 	}
@@ -222,8 +214,7 @@ func (sm StandardSessionManager) DeleteSession(id string) error {
 // also the sessions stored here have no updated Accessed field
 // use only for list of session ids
 func (sm StandardSessionManager) UserGetSessions(uid string) (sessions []Session, err error) {
-	k := "uid2sess:" + uid
-	value, err := sm.Store.Get(k)
+	value, err := sm.Store.Get("uid2sess", uid)
 	if err != nil {
 		return nil, err
 	}
@@ -235,8 +226,7 @@ func (sm StandardSessionManager) UserGetSessions(uid string) (sessions []Session
 		if validID(uid) {
 			// anon user has uid=sid
 			sid := uid
-			k := "id2sess:" + sid
-			value, err := sm.Store.Get(k)
+			value, err := sm.Store.Get("id2sess", sid)
 			if err != nil {
 				return nil, err
 			}
@@ -251,8 +241,7 @@ func (sm StandardSessionManager) UserGetSessions(uid string) (sessions []Session
 func (sm StandardSessionManager) UserAppendSession(uid string, sess *Session) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
-	k := "uid2sess:" + uid
-	value, err := sm.Store.Get(k)
+	value, err := sm.Store.Get("uid2sess", uid)
 	if err != nil {
 		return err
 	}
@@ -265,15 +254,14 @@ func (sm StandardSessionManager) UserAppendSession(uid string, sess *Session) er
 	} else {
 		sessions = append(sessions, *sess)
 	}
-	return sm.Store.Put(k, sessions)
+	return sm.Store.Put("uid2sess", uid, sessions)
 }
 
 func (sm StandardSessionManager) UserRemoveSession(uid string, sess *Session) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
-	k := "uid2sess:" + uid
-	value, err := sm.Store.Get(k)
+	value, err := sm.Store.Get("uid2sess", uid)
 	if err != nil {
 		return err
 	}
@@ -287,15 +275,14 @@ func (sm StandardSessionManager) UserRemoveSession(uid string, sess *Session) er
 			newsessions = append(newsessions, s)
 		}
 	}
-	return sm.Store.Put(k, newsessions)
+	return sm.Store.Put("uid2sess", uid, newsessions)
 }
 
 // return empty string if session not found for device
 // return only valid existing session
 func (sm *StandardSessionManager) CurrentSessionForDevice(device Hasher) (id string, err error) {
 	// first try to find named session id
-	k := "device2sid:" + device.Hash()
-	value, err := sm.Store.Get(k)
+	value, err := sm.Store.Get("device2sid", device.Hash())
 	if err != nil {
 		return "", err
 	}
@@ -311,8 +298,7 @@ func (sm *StandardSessionManager) CurrentSessionForDevice(device Hasher) (id str
 		}
 	}
 	// otherwise try to find anonymous session
-	k = "device2bid:" + device.Hash()
-	value, err = sm.Store.Get(k)
+	value, err = sm.Store.Get("device2bid", device.Hash())
 	if err != nil {
 		return "", err
 	}
@@ -341,8 +327,7 @@ func (sm *StandardSessionManager) GetDeviceForSession(id string) (device Hasher,
 		return nil, nil
 	}
 	// now if session exists search for device
-	k := "id2device:" + id
-	value, err := sm.Store.Get(k)
+	value, err := sm.Store.Get("id2device", id)
 	if err != nil {
 		return nil, err
 	}
@@ -365,32 +350,29 @@ func (sm *StandardSessionManager) GetDeviceForSession(id string) (device Hasher,
 
 func (sm *StandardSessionManager) SetDeviceForSession(session *Session, device Hasher) error {
 	id := session.ID
-	k := "id2device:" + id
-	err := sm.Store.Put(k, device)
+	err := sm.Store.Put("id2device", id, device)
 	if err != nil {
 		return err
 	}
 	//save last session id that the device was attached to
 	if session.Anon {
-		k = "device2bid:" + device.Hash()
+		return sm.Store.Put("device2bid", device.Hash(), id)
 	} else {
-		k = "device2sid:" + device.Hash()
+		return sm.Store.Put("device2sid", device.Hash(), id)
 	}
-	return sm.Store.Put(k, id)
 }
 
 func (sm *StandardSessionManager) DeleteDeviceForSession(sessionid string, device Hasher) error {
-	k := "id2device:" + sessionid
-	err := sm.Store.Delete(k)
+	err := sm.Store.Delete("id2device", sessionid)
 	if err != nil {
 		return err
 	}
 	dhash := device.Hash()
-	err = sm.Store.Delete("device2bid:" + dhash)
+	err = sm.Store.Delete("device2bid", dhash)
 	if err != nil {
 		return err
 	}
-	err = sm.Store.Delete("device2sid:" + dhash)
+	err = sm.Store.Delete("device2sid", dhash)
 	if err != nil {
 		return err
 	}

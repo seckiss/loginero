@@ -42,27 +42,25 @@ func (u SimpleUser) WithPasshash(hash string) User {
 }
 
 type StandardUserManager struct {
-	Store KeyValueStore
+	Store TypeKeyValueStore
 	mutex sync.Mutex
 }
 
 func (um *StandardUserManager) UserExists(uid string) (exists bool, err error) {
-	k := "uid2user:" + uid
-	u, err := um.Store.Get(k)
+	u, err := um.Store.Get("uid2user", uid)
 	exists = (u != nil)
 	return exists, err
 }
 
 // return true if user was found and password was updated
 func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated bool, err error) {
-	k := "uid2user:" + uid
-	u, err := um.Store.Get(k)
+	u, err := um.Store.Get("uid2user", uid)
 	if err == nil && u != nil {
 		user := u.(User)
 		hash, err := um.Hash(pass)
 		if err == nil {
 			user = user.WithPasshash(hash)
-			err = um.Store.Put(k, user)
+			err = um.Store.Put("uid2user", uid, user)
 			if err == nil {
 				updated = true
 			}
@@ -75,7 +73,6 @@ func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated 
 func (um *StandardUserManager) CreateUser(userino interface{}, pass string) (created bool, err error) {
 	user := userino.(User)
 	uid := user.GetUID()
-	k := "uid2user:" + uid
 	um.mutex.Lock()
 	defer um.mutex.Unlock()
 	exists, err := um.UserExists(uid)
@@ -83,7 +80,7 @@ func (um *StandardUserManager) CreateUser(userino interface{}, pass string) (cre
 		hash, err := um.Hash(pass)
 		if err == nil {
 			user = user.WithPasshash(hash)
-			err = um.Store.Put(k, user)
+			err = um.Store.Put("uid2user", uid, user)
 			if err == nil {
 				created = true
 			}
@@ -94,8 +91,7 @@ func (um *StandardUserManager) CreateUser(userino interface{}, pass string) (cre
 
 // return true if user exists and password matches
 func (um *StandardUserManager) CredsValid(uid string, pass string) (valid bool, err error) {
-	k := "uid2user:" + uid
-	u, err := um.Store.Get(k)
+	u, err := um.Store.Get("uid2user", uid)
 	if err == nil && u != nil {
 		user := u.(User)
 		valid = um.HashValid(user.GetPasshash(), pass)

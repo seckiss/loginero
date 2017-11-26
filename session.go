@@ -37,8 +37,8 @@ func (lo *Loginero) wrapContext(h http.HandlerFunc, ctx *Context) http.HandlerFu
 }
 
 type Session struct {
-	ID      string //session id with type (id2sess:xxxx, token2sess:xxxxx)
-	UID     string //user id
+	ID      string // session id
+	UID     string // user id
 	Created time.Time
 	Anon    bool
 }
@@ -81,6 +81,9 @@ func (sm StandardSessionManager) BindToken(uid string) (token string, err error)
 }
 
 func (sm StandardSessionManager) FetchBound(token string) (*Session, error) {
+	if token == "" {
+		return nil, nil
+	}
 	value, err := sm.Store.Get("token2sess", token)
 	if err != nil {
 		return nil, err
@@ -101,6 +104,9 @@ func (sm StandardSessionManager) FetchBound(token string) (*Session, error) {
 }
 
 func (sm StandardSessionManager) GetSession(id string) (*Session, error) {
+	if id == "" {
+		return nil, nil
+	}
 	value, err := sm.Store.Get("id2sess", id)
 	if err != nil {
 		return nil, err
@@ -130,6 +136,9 @@ func (sm StandardSessionManager) GetSession(id string) (*Session, error) {
 }
 
 func (sm StandardSessionManager) SessionLastAccessed(id string) (*time.Time, error) {
+	if id == "" {
+		return nil, nil
+	}
 	value, err := sm.Store.Get("id2accessed", id)
 	if err != nil {
 		return nil, err
@@ -142,6 +151,9 @@ func (sm StandardSessionManager) SessionLastAccessed(id string) (*time.Time, err
 }
 
 func (sm StandardSessionManager) AccessSession(id string) error {
+	if id == "" {
+		return nil
+	}
 	return sm.Store.Put("id2accessed", id, time.Now())
 }
 
@@ -281,6 +293,9 @@ func (sm *StandardSessionManager) CurrentSessionForDevice(device Hasher) (id str
 	}
 	if value != nil {
 		id := value.(string)
+		if id == "" {
+			return "", nil
+		}
 		// return session id only if it is valid
 		session, err := sm.GetSession(id)
 		if err != nil {
@@ -297,6 +312,9 @@ func (sm *StandardSessionManager) CurrentSessionForDevice(device Hasher) (id str
 	}
 	if value != nil {
 		id := value.(string)
+		if id == "" {
+			return "", nil
+		}
 		// return session id only if it is valid
 		session, err := sm.GetSession(id)
 		if err != nil {
@@ -310,6 +328,9 @@ func (sm *StandardSessionManager) CurrentSessionForDevice(device Hasher) (id str
 }
 
 func (sm *StandardSessionManager) GetDeviceForSession(id string) (device Hasher, err error) {
+	if id == "" {
+		return nil, nil
+	}
 	// first check if session is not expired by calling GetSession (which deletes expired sessions)
 	session, err := sm.GetSession(id)
 	if err != nil {
@@ -334,6 +355,9 @@ func (sm *StandardSessionManager) GetDeviceForSession(id string) (device Hasher,
 	deviceSessionId, err := sm.CurrentSessionForDevice(device)
 	if err != nil {
 		return nil, err
+	}
+	if deviceSessionId == "" {
+		return nil, nil
 	}
 	if deviceSessionId == id {
 		return device, nil

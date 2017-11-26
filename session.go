@@ -199,13 +199,6 @@ func (sm StandardSessionManager) DeleteSession(id string) error {
 	if err != nil {
 		return err
 	}
-	/*
-		// also session id to device mapping
-		err = sm.Store.Delete("id2device:" + id)
-		if err != nil {
-			return err
-		}
-	*/
 	return err
 }
 

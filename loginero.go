@@ -268,9 +268,9 @@ func (lo *Loginero) browserSessionFallback(r *http.Request) (bid string, sess *S
 	if bid == "" {
 		bid = generateID()
 		// create anonymous session with uid=bid
-		sess, err = lo.SessMan.CreateSession(bid, bid, true)
+		err = lo.UserMan.CreateAnonUser(bid)
 		if err == nil {
-			err = lo.UserMan.CreateAnonUser(bid)
+			sess, err = lo.SessMan.CreateSession(bid, bid, true)
 		}
 	} else {
 		// get anonymous session
@@ -281,9 +281,9 @@ func (lo *Loginero) browserSessionFallback(r *http.Request) (bid string, sess *S
 		if err == nil && sess == nil {
 			bid = generateID()
 			// create anonymous session with uid=bid
-			sess, err = lo.SessMan.CreateSession(bid, bid, true)
+			err = lo.UserMan.CreateAnonUser(bid)
 			if err == nil {
-				err = lo.UserMan.CreateAnonUser(bid)
+				sess, err = lo.SessMan.CreateSession(bid, bid, true)
 			}
 		}
 

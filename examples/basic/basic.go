@@ -6,8 +6,6 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
-	webpush "github.com/sherclockholmes/webpush-go"
 	"html"
 	"log"
 	"loginero"
@@ -15,6 +13,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/davecgh/go-spew/spew"
+	webpush "github.com/sherclockholmes/webpush-go"
 )
 
 var commonStore loginero.KeyValueStore
@@ -25,7 +26,7 @@ func p(fs string, args ...interface{}) {
 
 func main() {
 
-	gob.Register(loginero.SimpleUser{})
+	gob.Register(loginero.Creds{})
 	gob.Register(loginero.Session{})
 	gob.Register([]loginero.Session{})
 	gob.Register(webpush.Subscription{})
@@ -47,11 +48,11 @@ func main() {
 			}
 		}()
 	*/
-	def := loginero.DefaultInstance
-	def.SessMan = &loginero.StandardSessionManager{
+	lero := loginero.DefaultInstance
+	lero.SessMan = &loginero.StandardSessionManager{
 		Store: loginero.StoreAdapter{commonStore},
 	}
-	def.UserMan = &loginero.StandardUserManager{
+	lero.UserMan = &loginero.StandardUserManager{
 		Store: loginero.StoreAdapter{commonStore},
 	}
 	/////////////////////////////////////////////////////////////////////////////

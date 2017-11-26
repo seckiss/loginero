@@ -2,9 +2,10 @@ package loginero
 
 import (
 	"errors"
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"sync"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // UserManager does not introduce its own errors
@@ -12,33 +13,16 @@ import (
 type UserManager interface {
 	UserExists(uid string) (exists bool, err error)
 	UpdatePassword(uid string, pass string) (updated bool, err error)
-	CreateUser(user interface{}, pass string) (created bool, err error)
+	CreateUser(uid string, pass string) (created bool, err error)
 	CredsValid(uid string, pass string) (valid bool, err error)
 	PasswordPolicy(pass string) error
 	Hash(pass string) (hash string, err error)
 	HashValid(hash string, pass string) (valid bool)
 }
 
-type User interface {
-	GetUID() string
-	GetPasshash() string
-	WithPasshash(hash string) User
-}
-
-type SimpleUser struct {
+type Creds struct {
 	UID      string
 	Passhash string
-}
-
-func (u SimpleUser) GetUID() string {
-	return u.UID
-}
-func (u SimpleUser) GetPasshash() string {
-	return u.Passhash
-}
-func (u SimpleUser) WithPasshash(hash string) User {
-	u.Passhash = hash
-	return u
 }
 
 type StandardUserManager struct {
@@ -47,20 +31,20 @@ type StandardUserManager struct {
 }
 
 func (um *StandardUserManager) UserExists(uid string) (exists bool, err error) {
-	u, err := um.Store.Get("uid2user", uid)
-	exists = (u != nil)
+	c, err := um.Store.Get("uid2creds", uid)
+	exists = (c != nil)
 	return exists, err
 }
 
 // return true if user was found and password was updated
 func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated bool, err error) {
-	u, err := um.Store.Get("uid2user", uid)
-	if err == nil && u != nil {
-		user := u.(User)
+	c, err := um.Store.Get("uid2creds", uid)
+	if err == nil && c != nil {
+		creds := c.(Creds)
 		hash, err := um.Hash(pass)
 		if err == nil {
-			user = user.WithPasshash(hash)
-			err = um.Store.Put("uid2user", uid, user)
+			creds.Passhash = hash
+			err = um.Store.Put("uid2creds", uid, creds)
 			if err == nil {
 				updated = true
 			}
@@ -70,17 +54,14 @@ func (um *StandardUserManager) UpdatePassword(uid string, pass string) (updated 
 }
 
 // return true if user does not exist yet (by uid) and the new one was saved
-func (um *StandardUserManager) CreateUser(userino interface{}, pass string) (created bool, err error) {
-	user := userino.(User)
-	uid := user.GetUID()
+func (um *StandardUserManager) CreateUser(uid string, pass string) (created bool, err error) {
 	um.mutex.Lock()
 	defer um.mutex.Unlock()
 	exists, err := um.UserExists(uid)
 	if err == nil && !exists {
 		hash, err := um.Hash(pass)
 		if err == nil {
-			user = user.WithPasshash(hash)
-			err = um.Store.Put("uid2user", uid, user)
+			err = um.Store.Put("uid2creds", uid, Creds{UID: uid, Passhash: hash})
 			if err == nil {
 				created = true
 			}
@@ -91,10 +72,10 @@ func (um *StandardUserManager) CreateUser(userino interface{}, pass string) (cre
 
 // return true if user exists and password matches
 func (um *StandardUserManager) CredsValid(uid string, pass string) (valid bool, err error) {
-	u, err := um.Store.Get("uid2user", uid)
-	if err == nil && u != nil {
-		user := u.(User)
-		valid = um.HashValid(user.GetPasshash(), pass)
+	c, err := um.Store.Get("uid2creds", uid)
+	if err == nil && c != nil {
+		creds := c.(Creds)
+		valid = um.HashValid(creds.Passhash, pass)
 	}
 	return valid, err
 }
@@ -129,25 +110,14 @@ func (um *StandardUserManager) HashValid(hash string, pass string) (valid bool) 
 }
 
 type UserExtractor interface {
-	ExtractNewUser(r *http.Request) (uid string, pass string, user interface{}, err error)
-	ExtractLogin(r *http.Request) (uid string, pass string, err error)
+	ExtractUserPass(r *http.Request) (uid string, pass string, err error)
 	ExtractTokenPass(r *http.Request) (token string, pass string, err error)
 }
 
 type StandardUserExtractor struct {
 }
 
-func (pe *StandardUserExtractor) ExtractNewUser(r *http.Request) (uid string, pass string, user interface{}, err error) {
-	username := r.FormValue("username")
-	pass1 := r.FormValue("pass1")
-	pass2 := r.FormValue("pass2")
-	if username != "" && pass1 != "" && pass1 == pass2 {
-		return username, pass1, SimpleUser{UID: username}, nil
-	}
-	return "", "", nil, errors.New("Wrong POST params")
-}
-
-func (pe *StandardUserExtractor) ExtractLogin(r *http.Request) (uid string, pass string, err error) {
+func (pe *StandardUserExtractor) ExtractUserPass(r *http.Request) (uid string, pass string, err error) {
 	username := r.FormValue("username")
 	pass1 := r.FormValue("pass1")
 	if username != "" && pass1 != "" {
@@ -160,8 +130,7 @@ func (pe *StandardUserExtractor) ExtractLogin(r *http.Request) (uid string, pass
 func (pe *StandardUserExtractor) ExtractTokenPass(r *http.Request) (token string, pass string, err error) {
 	token = r.FormValue("token")
 	pass1 := r.FormValue("pass1")
-	pass2 := r.FormValue("pass2")
-	if token != "" && pass1 != "" && pass1 == pass2 {
+	if token != "" && pass1 != "" {
 		return token, pass1, nil
 	}
 	return "", "", errors.New("Wrong POST params")

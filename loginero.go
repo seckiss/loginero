@@ -102,7 +102,7 @@ func LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
 
 func (lo *Loginero) LoginController(loginHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid, pass, err := lo.Extractor.ExtractLogin(r)
+		uid, pass, err := lo.Extractor.ExtractUserPass(r)
 		if err != nil {
 			lo.wrapContext(loginHandler, &Context{nil, err})(w, r)
 			return
@@ -139,12 +139,12 @@ func CreateAccountController(createAccountHandler http.HandlerFunc) http.Handler
 
 func (lo *Loginero) CreateAccountController(createAccountHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid, pass, user, err := lo.Extractor.ExtractNewUser(r)
+		uid, pass, err := lo.Extractor.ExtractUserPass(r)
 		if err != nil {
 			lo.wrapContext(createAccountHandler, &Context{nil, err})(w, r)
 			return
 		}
-		created, err := lo.UserMan.CreateUser(user, pass)
+		created, err := lo.UserMan.CreateUser(uid, pass)
 		if err != nil {
 			lo.wrapContext(createAccountHandler, &Context{nil, err})(w, r)
 			return

@@ -14,6 +14,7 @@ type UserManager interface {
 	UserExists(uid string) (exists bool, err error)
 	UpdatePassword(uid string, pass string) (updated bool, err error)
 	CreateUser(uid string, pass string) (created bool, err error)
+	CreateAnonUser(uid string) (err error)
 	CredsValid(uid string, pass string) (valid bool, err error)
 	PasswordPolicy(pass string) error
 	Hash(pass string) (hash string, err error)
@@ -68,6 +69,10 @@ func (um *StandardUserManager) CreateUser(uid string, pass string) (created bool
 		}
 	}
 	return created, err
+}
+
+func (um *StandardUserManager) CreateAnonUser(uid string) (err error) {
+	return um.Store.Put("anonuid", uid, uid)
 }
 
 // return true if user exists and password matches

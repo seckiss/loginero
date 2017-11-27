@@ -58,13 +58,13 @@ type SessionManager interface {
 	FetchBound(token string) (*Session, error)
 	// User related
 	UserGetSessions(uid string) (sessions []Session, err error)
-	UserAppendSession(uid string, sess *Session) error
-	UserRemoveSession(uid string, sess *Session) error
+	//UserAppendSession(uid string, sess *Session) error    // not really part of API
+	//UserRemoveSession(uid string, sess *Session) error    // not really part of API
 	// Device related
 	GetDeviceForSession(id string) (device Hasher, err error)
 	SetDeviceForSession(session *Session, device Hasher) error
-	DeleteDeviceForSession(sessionid string, device Hasher) error
-	CurrentSessionForDevice(device Hasher) (id string, err error)
+	//DeleteDeviceForSession(sessionid string, device Hasher) error    // not really part of API
+	//CurrentSessionForDevice(device Hasher) (id string, err error)    // not really part of API
 }
 
 type StandardSessionManager struct {
@@ -123,12 +123,11 @@ func (sm StandardSessionManager) GetSession(id string) (*Session, error) {
 		var sess = sessions[0]
 
 		//delete session if expired
-		expire := map[bool]time.Duration{false: namedSessionExpireTime, true: anonSessionExpireTime}
 		lastAccessed, err := sm.SessionLastAccessed(id)
 		if err != nil {
 			return nil, err
 		}
-		if lastAccessed != nil && time.Now().Sub(*lastAccessed) > expire[sess.Anon] {
+		if lastAccessed != nil && IsSessionExpired(*lastAccessed, sess.Anon) {
 			err := sm.DeleteSession(id)
 			if err != nil {
 				return nil, err
@@ -232,7 +231,7 @@ func (sm StandardSessionManager) UserGetSessions(uid string) (sessions []Session
 	} else {
 		// only non-anonymous users' sessions are stored in session list
 		// for anon try to find a single session
-		if validID(uid) {
+		if ValidID(uid) {
 			// anon user has uid=sid
 			sid := uid
 			value, err := sm.Store.Get("id2sess", sid)

@@ -56,9 +56,24 @@ type Context struct {
 }
 
 var DefaultInstance *Loginero
-var tokenExpireTime = 30 * time.Minute
-var namedSessionExpireTime = 3 * time.Hour
-var anonSessionExpireTime = 365 * 24 * time.Hour
+
+func IsTokenExpired(created time.Time) bool {
+	return time.Now().Sub(created) > 30*time.Minute
+}
+
+func IsNamedSessionExpired(accessed time.Time) bool {
+	return time.Now().Sub(accessed) > 3*time.Hour
+}
+func IsAnonSessionExpired(accessed time.Time) bool {
+	return time.Now().Sub(accessed) > 365*24*time.Hour
+}
+func IsSessionExpired(accessed time.Time, anon bool) bool {
+	if anon {
+		return IsAnonSessionExpired(accessed)
+	} else {
+		return IsNamedSessionExpired(accessed)
+	}
+}
 
 func CurrentSession(r *http.Request) (*Session, error) {
 	return DefaultInstance.CurrentSession(r)
@@ -185,7 +200,7 @@ func (lo *Loginero) ResetPasswordController(resetHandler http.HandlerFunc) http.
 			lo.wrapContext(resetHandler, &Context{nil, err})(w, r)
 			return
 		}
-		if sess != nil && time.Now().Sub(sess.Created) < tokenExpireTime {
+		if sess != nil && !IsTokenExpired(sess.Created) {
 			updated, err := lo.UserMan.UpdatePassword(sess.UID, pass)
 			if err != nil {
 				lo.wrapContext(resetHandler, &Context{nil, err})(w, r)

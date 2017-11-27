@@ -254,6 +254,7 @@ func (lo *Loginero) PageController(pageHandler http.HandlerFunc) http.HandlerFun
 		}
 		bid, sess, err := lo.browserSessionFallback(r)
 		setBIDCookie(w, bid)
+
 		lo.wrapContext(pageHandler, &Context{sess, err})(w, r)
 		return
 	}

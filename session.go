@@ -73,7 +73,7 @@ type StandardSessionManager struct {
 }
 
 func (sm StandardSessionManager) BindToken(uid string) (token string, err error) {
-	token = generateID()
+	token = GenerateID()
 	sess := Session{
 		ID:      token,
 		UID:     uid,

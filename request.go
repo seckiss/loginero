@@ -12,7 +12,7 @@ var b62regexp = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
 // Generate random string
 // 16-chars of base62 gives about 95.3 bits of entropy
 // This gives the space of about 10^10 generated ids with probability of collision = 10^-9 according to birthday paradox calcs
-func generateID() string {
+func GenerateID() string {
 	var b = make([]byte, 16)
 	for i := 0; i < 16; i++ {
 		b[i] = b62ascii[mrand.Intn(62)]

@@ -114,7 +114,7 @@ func (lo *Loginero) LoginController(loginHandler http.HandlerFunc) http.HandlerF
 		}
 
 		if valid {
-			sid := generateID()
+			sid := GenerateID()
 			setSIDCookie(w, sid)
 			sess, err := lo.SessMan.CreateSession(sid, uid, false)
 			lo.wrapContext(loginHandler, &Context{sess, err})(w, r)
@@ -150,7 +150,7 @@ func (lo *Loginero) CreateAccountController(createAccountHandler http.HandlerFun
 			return
 		}
 		if created {
-			sid := generateID()
+			sid := GenerateID()
 			setSIDCookie(w, sid)
 			sess, err := lo.SessMan.CreateSession(sid, uid, false)
 			lo.wrapContext(createAccountHandler, &Context{sess, err})(w, r)
@@ -193,7 +193,7 @@ func (lo *Loginero) ResetPasswordController(resetHandler http.HandlerFunc) http.
 			}
 			if updated {
 				// TODO should we deactivate all other sessions related to uid?
-				sid := generateID()
+				sid := GenerateID()
 				setSIDCookie(w, sid)
 				sess, err := lo.SessMan.CreateSession(sid, sess.UID, false)
 				lo.wrapContext(resetHandler, &Context{sess, err})(w, r)
@@ -266,7 +266,7 @@ func (lo *Loginero) browserSessionFallback(r *http.Request) (bid string, sess *S
 	// fallback - pass anonymous browser user
 	bid = getRequestBID(r)
 	if bid == "" {
-		bid = generateID()
+		bid = GenerateID()
 		// create anonymous session with uid=bid
 		err = lo.UserMan.CreateAnonUser(bid)
 		if err == nil {
@@ -279,7 +279,7 @@ func (lo *Loginero) browserSessionFallback(r *http.Request) (bid string, sess *S
 			err = lo.SessMan.AccessSession(bid)
 		}
 		if err == nil && sess == nil {
-			bid = generateID()
+			bid = GenerateID()
 			// create anonymous session with uid=bid
 			err = lo.UserMan.CreateAnonUser(bid)
 			if err == nil {

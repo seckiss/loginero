@@ -1,6 +1,7 @@
 package loginero
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -27,6 +28,9 @@ func (lo *Loginero) wrapContext(h http.HandlerFunc, ctx *Context) http.HandlerFu
 		lo.context[r] = ctx
 		lo.contextMutex.Unlock()
 
+		if ctx.err != nil {
+			fmt.Printf("loginero error: %v\n", ctx.err)
+		}
 		h(w, r)
 
 		lo.contextMutex.Lock()

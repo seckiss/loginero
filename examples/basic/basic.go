@@ -395,11 +395,6 @@ var webpushScript = `
 
 var serviceWorker = `
 'use strict';
-
-/* eslint-env browser, serviceworker */
-
-//importScripts('./scripts/libs/idb-keyval.js');
-
 self.addEventListener('push', function(event) {
   console.log('Received push');
   let notificationTitle = 'Hello';
@@ -413,15 +408,11 @@ self.addEventListener('push', function(event) {
       url: 'https://fruho.com',
     },
   };
-
-
-
   if (event.data) {
     const dataText = event.data.text();
     notificationTitle = 'Received Payload';
     notificationOptions.body = 'Push data: ' + dataText;
   }
-
   event.waitUntil(
     Promise.all([
       self.registration.showNotification(
@@ -432,12 +423,10 @@ self.addEventListener('push', function(event) {
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-
   let clickResponsePromise = Promise.resolve();
   if (event.notification.data && event.notification.data.url) {
     //clickResponsePromise = clients.openWindow(event.notification.data.url);
   }
-
   event.waitUntil(
     Promise.all([
       clickResponsePromise,
